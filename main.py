@@ -19,6 +19,15 @@ def catch_exception():
     log.exception("Исключение:")
 
 
+def except_cather(func):
+    def wrapper(func):
+        try:
+            func()
+        except Exception as e:
+            catch_exception()
+    wrapper(func)
+
+
 # ВЫВОД ОКНА С СООБЩЕНИЕМ
 def show_msg(msg, msg_type="Информация"):
     msg_window = QMessageBox()
@@ -93,7 +102,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.ui.pushButton_DI_01.clicked.connect(self._testing)
 
-        self.myclose = False
+        # self.myclose = False
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
@@ -136,7 +145,7 @@ class MyWindow(QtWidgets.QMainWindow):
         try:
             self.client = ModbusSerialClient(
                 method='ASCII',
-                port=self.ui.pushButton_searh_ports.text(),
+                port=self.ui.comboBox_com_port.currentText(),
                 baudrate=int(self.ui.comboBox_speed.currentText()),
                 bytesize=8,
                 parity=self.ui.comboBox_parity.currentText(),
@@ -300,6 +309,11 @@ class MyWindow(QtWidgets.QMainWindow):
             time.sleep(song_time)
         except Exception as e:
             print(e)
+
+    @except_cather
+    def closeEvent(self, event):
+        self.disconnecting()
+        event.accept()
 
     def _testing(self):
         print('test!')
