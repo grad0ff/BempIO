@@ -1,7 +1,8 @@
 # pyuic5 BempIO.ui -o BempIO.py
-import asyncio
 import time, logging
 import sys, pygame, threading
+import traceback
+
 import serial.tools.list_ports
 
 from PyQt5 import QtWidgets
@@ -16,16 +17,7 @@ from pymodbus.exceptions import ConnectionException
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
 def catch_exception():
     log = logging.getLogger()
-    log.exception("Исключение:")
-
-
-def except_cather(func):
-    def wrapper(func):
-        try:
-            func()
-        except Exception as e:
-            catch_exception()
-    wrapper(func)
+    log.exception('\n\t Новое исключение: \n')
 
 
 # ВЫВОД ОКНА С СООБЩЕНИЕМ
@@ -138,7 +130,8 @@ class MyWindow(QtWidgets.QMainWindow):
             self.ui.comboBox_com_port.addItems(ports)
         except Exception as e:
             catch_exception()
-            show_msg("Ошибка поиска COM-порта", 'Проблема')
+            show_msg("Ошибка поиска COM-порта", 'Ошибка')
+
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connecting(self):
@@ -153,8 +146,9 @@ class MyWindow(QtWidgets.QMainWindow):
             )
             self.client.connect()
             assert self.client.is_socket_open()
-        except AssertionError:
-            show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
+        except AssertionError as e:
+            # show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
+            show_msg("e.args", 'Ошибка')
         except Exception as e:
             catch_exception()
             print(e)
@@ -235,22 +229,18 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
-        try:
-            if self.th_check_dio.is_alive():
-                self.th_check_dio.run_flag = False
-            while self.th_check_dio.is_alive():
-                pass
-            if self.th_voicing_dio.is_alive():
-                self.th_voicing_dio.run_flag = False
-            self.client.close()
-            self.select_ied()
-            self.change_btn_style(False)
-            self.unselect_dio(self.ui.groupBox_di)
-            self.unselect_dio(self.ui.groupBox_do)
-            pygame.quit()
-        except Exception as e:
-            catch_exception()
-            show_msg(e, 'Проблема!')
+        if self.th_check_dio.is_alive():
+            self.th_check_dio.run_flag = False
+        while self.th_check_dio.is_alive():
+            pass
+        if self.th_voicing_dio.is_alive():
+            self.th_voicing_dio.run_flag = False
+        self.client.close()
+        self.select_ied()
+        self.change_btn_style(False)
+        self.unselect_dio(self.ui.groupBox_di)
+        self.unselect_dio(self.ui.groupBox_do)
+        pygame.quit()
 
     # ОТОБРАЖЕНИЕ РАНЕЕ СКРЫТЫХ КНОПОК
     def unselect_dio(self, group_dio):
@@ -261,13 +251,9 @@ class MyWindow(QtWidgets.QMainWindow):
     # ОПРОС DI и DO
     def check_dio(self):
         while getattr(self.th_check_dio, 'run_flag', True):
-            try:
-                time.sleep(self.polling_time)
-                self.checking_dio(self.di_address, self.max_di, self.di_list, self.triggered_di_list, 'DI')
-                self.checking_dio(self.do_address, self.max_do, self.do_list, self.triggered_do_list, 'DO')
-            except Exception as e:
-                catch_exception()
-                print(e)
+            time.sleep(self.polling_time)
+            self.checking_dio(self.di_address, self.max_di, self.di_list, self.triggered_di_list, 'DI')
+            self.checking_dio(self.do_address, self.max_do, self.do_list, self.triggered_do_list, 'DO')
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
     def checking_dio(self, dio_address, max_dio, dio_list, trig_dio_list, dio_type):
@@ -282,15 +268,15 @@ class MyWindow(QtWidgets.QMainWindow):
                     trig_dio_list.add(dio)
                 else:
                     if dio in trig_dio_list:
+                        self.dio_off = True
                         trig_dio_list.remove(dio)
                         dio_list[i].setStyleSheet('background: #f0f0f0')
         except ConnectionException:
-            print(555)
             self.th_check_dio.run_flag = False
             self.close()
         except Exception as e:
             catch_exception()
-            show_msg(e, 'Проблема!')
+            show_msg(e, 'Проблема')
 
     def voicing_dio(self, dio, dio_type):
         if self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI':
@@ -303,14 +289,23 @@ class MyWindow(QtWidgets.QMainWindow):
     def voicing(self, dio, dio_type):
         print(f"voicing {dio_type}{dio}")
         try:
-            song = pygame.mixer.Sound(f'static/numbers/{dio_type}/{dio}.wav')
-            song_time = song.get_length()
-            song.play()
+            song_dio_type = pygame.mixer.Sound(f'static/numbers/{dio_type}.wav')
+            song_time = song_dio_type.get_length()
+            song_dio_type.play()
             time.sleep(song_time)
+            song_dio = pygame.mixer.Sound(f'static/numbers/{dio}.wav')
+            song_time = song_dio.get_length()
+            song_dio.play()
+            time.sleep(song_time)
+            if self.dio_off:
+                song_dio = pygame.mixer.Sound(f'static/numbers/откл.wav')
+                song_time = song_dio.get_length()
+                song_dio.play()
+                time.sleep(song_time)
+                self.dio_off = False
         except Exception as e:
             print(e)
 
-    @except_cather
     def closeEvent(self, event):
         self.disconnecting()
         event.accept()
