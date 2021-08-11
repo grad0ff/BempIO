@@ -1,17 +1,19 @@
 # pyuic5 BempIO.ui -o BempIO.py
-import time, logging
-import sys, pygame, threading
-import traceback
-
+import logging
+import pygame
 import serial.tools.list_ports
+import sys
+import threading
+import time
 
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QPalette, QIcon
 from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QPalette, QIcon
 from PyQt5.QtWidgets import QMessageBox
-from BempIO import Ui_MainWindow
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
+
+from BempIO import Ui_MainWindow
 
 
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
@@ -78,23 +80,21 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.spinBox_ied_address.setMaximum(247)
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
-        self.ui.comboBox_voice_type.addItems(['1', '2', '3', '4'])
+        self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
         self.polling_time = 0.5
         self.max_di = 1
         self.max_do = 1
-        self.triggered_di_list = set()
-        self.triggered_do_list = set()
-
+        self.enabled_di_list = set()
+        self.enabled_do_list = set()
         self.unit = 0x01
 
         # обработка событий
         self.ui.pushButton_connect.clicked.connect(self.connecting)
         self.ui.pushButton_disconnect.clicked.connect(self.disconnecting)
         self.ui.comboBox_ied_type.activated.connect(self.select_ied)
+        self.voice_type = self.ui.comboBox_voice_type.currentText()
 
         self.ui.pushButton_DI_01.clicked.connect(self._testing)
-
-        # self.myclose = False
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
@@ -128,17 +128,19 @@ class MyWindow(QtWidgets.QMainWindow):
             port_list = serial.tools.list_ports.comports()
             ports = sorted(list(map(lambda x: x.name, port_list)))
             self.ui.comboBox_com_port.addItems(ports)
-        except Exception as e:
+        except Exception:
             catch_exception()
             show_msg("Ошибка поиска COM-порта", 'Ошибка')
-
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connecting(self):
         try:
+            port = self.ui.comboBox_com_port.currentText()
+            # if len(port) != 0
+            #     raise Exception
             self.client = ModbusSerialClient(
                 method='ASCII',
-                port=self.ui.comboBox_com_port.currentText(),
+                port=port,
                 baudrate=int(self.ui.comboBox_speed.currentText()),
                 bytesize=8,
                 parity=self.ui.comboBox_parity.currentText(),
@@ -146,9 +148,8 @@ class MyWindow(QtWidgets.QMainWindow):
             )
             self.client.connect()
             assert self.client.is_socket_open()
-        except AssertionError as e:
-            # show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
-            show_msg("e.args", 'Ошибка')
+        except AssertionError:
+            show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
         except Exception as e:
             catch_exception()
             print(e)
@@ -200,9 +201,9 @@ class MyWindow(QtWidgets.QMainWindow):
         self.th_check_dio.run_flag = True
         self.th_check_dio.start()
 
-        self.th_voicing_dio = threading.Thread(target=self.voicing_dio, args=(None, None), name='th_voicing_dio')
-        self.th_voicing_dio.run_flag = True
-        self.th_voicing_dio.start()
+        # self.th_voicing_dio = threading.Thread(target=self.voicing_dio, args=(None, None, None), name='th_voicing_dio')
+        # self.th_voicing_dio.run_flag = True
+        # self.th_voicing_dio.start()
 
     # ИЗМЕНЕНИЕ ВИДА КНОПОК НАСТРОЕК ПРИ ПОДКЛЮЧЕНИИ/ОТКЛЮЧЕНИИ
     def change_btn_style(self, value):
@@ -213,6 +214,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setEnabled(value)
         self.ui.groupBox_di.setEnabled(value)
         self.ui.groupBox_do.setEnabled(value)
+        # self.ui.groupBox_voice_type.setEnabled(value)
         if value:
             self.ui.pushButton_connect.setStyleSheet('background: rgb(100,250,50)')
             self.ui.pushButton_connect.setText('Подключено')
@@ -229,12 +231,13 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
+        self.ui.radioButton_voicing_off.setChecked(True)
+        # if self.th_voicing_dio.is_alive():
+        #     self.th_voicing_dio.run_flag = False
         if self.th_check_dio.is_alive():
             self.th_check_dio.run_flag = False
         while self.th_check_dio.is_alive():
             pass
-        if self.th_voicing_dio.is_alive():
-            self.th_voicing_dio.run_flag = False
         self.client.close()
         self.select_ied()
         self.change_btn_style(False)
@@ -252,59 +255,50 @@ class MyWindow(QtWidgets.QMainWindow):
     def check_dio(self):
         while getattr(self.th_check_dio, 'run_flag', True):
             time.sleep(self.polling_time)
-            self.checking_dio(self.di_address, self.max_di, self.di_list, self.triggered_di_list, 'DI')
-            self.checking_dio(self.do_address, self.max_do, self.do_list, self.triggered_do_list, 'DO')
+            self.checking_dio(self.di_address, self.max_di, self.di_list, self.enabled_di_list, 'DI')
+            self.checking_dio(self.do_address, self.max_do, self.do_list, self.enabled_do_list, 'DO')
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
-    def checking_dio(self, dio_address, max_dio, dio_list, trig_dio_list, dio_type):
+    def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
             checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits
             for i in range(max_dio):
                 dio = i + 1
                 if checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: rgb(51,204,51)')
-                    if dio not in trig_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        self.voicing_dio(dio, dio_type)
-                    trig_dio_list.add(dio)
+                    if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
+                        self.voicing_dio(dio, dio_type, 'on')
+                        print(1)
+                    enabled_dio_list.add(dio)
                 else:
-                    if dio in trig_dio_list:
-                        self.dio_off = True
-                        trig_dio_list.remove(dio)
-                        dio_list[i].setStyleSheet('background: #f0f0f0')
+                    dio_list[i].setStyleSheet('background: #f0f0f0')
+                    if dio in enabled_dio_list:
+                        if not self.ui.radioButton_voicing_off.isChecked():
+                            self.voicing_dio(dio, dio_type, 'off')
+                            print(0)
+                        enabled_dio_list.remove(dio)
         except ConnectionException:
             self.th_check_dio.run_flag = False
             self.close()
-        except Exception as e:
+        except Exception:
             catch_exception()
-            show_msg(e, 'Проблема')
+            show_msg("Непредвиденная ошибка", 'Проблема')
 
-    def voicing_dio(self, dio, dio_type):
-        if self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI':
-            self.voicing(dio, dio_type)
-        elif self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO':
-            self.voicing(dio, dio_type)
-        elif self.ui.radioButton_dio_voicing.isChecked():
-            self.voicing(dio, dio_type)
-
-    def voicing(self, dio, dio_type):
-        print(f"voicing {dio_type}{dio}")
-        try:
-            song_dio_type = pygame.mixer.Sound(f'static/numbers/{dio_type}.wav')
-            song_time = song_dio_type.get_length()
-            song_dio_type.play()
-            time.sleep(song_time)
-            song_dio = pygame.mixer.Sound(f'static/numbers/{dio}.wav')
-            song_time = song_dio.get_length()
-            song_dio.play()
-            time.sleep(song_time)
-            if self.dio_off:
-                song_dio = pygame.mixer.Sound(f'static/numbers/откл.wav')
-                song_time = song_dio.get_length()
+    def voicing_dio(self, dio, dio_type, state):
+        if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
+                (self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO') or \
+                self.ui.radioButton_dio_voicing.isChecked():
+            try:
+                song_dio_type = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav')
+                song_time = song_dio_type.get_length() - 0.25
+                song_dio_type.play()
+                time.sleep(song_time)
+                song_dio = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/on-off/{state}+.wav')
+                song_time = song_dio.get_length() - 0.1
                 song_dio.play()
                 time.sleep(song_time)
-                self.dio_off = False
-        except Exception as e:
-            print(e)
+            except Exception as e:
+                print(e)
 
     def closeEvent(self, event):
         self.disconnecting()
