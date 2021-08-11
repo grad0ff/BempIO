@@ -10,6 +10,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QPalette, QIcon
 from PyQt5.QtWidgets import QMessageBox
+
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
 
