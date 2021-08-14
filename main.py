@@ -7,7 +7,7 @@ import threading
 import time
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, QTimer
 from PyQt5.QtGui import QPalette, QIcon
 from PyQt5.QtWidgets import QMessageBox
 
@@ -24,23 +24,21 @@ def catch_exception():
 
 
 # ВЫВОД ОКНА С СООБЩЕНИЕМ
-def show_msg(msg, msg_type="Информация"):
+def show_msg(msg=f"Непредвиденная ошибка!\n{sys.exc_info()}", msg_type="Проблема"):
     msg_window = QMessageBox()
-    msg_icon = QMessageBox.Information
-    window_icon = QIcon('static/images/green_LED.png')
-    if msg_type == 'Ошибка':
+    window_icon = QIcon('static/images/red_LED.png')
+    msg_icon = QMessageBox.Critical
+    if msg_type == 'Информация':
+        msg_icon = QMessageBox.Information
+        window_icon = QIcon('static/images/green_LED.png')
+    elif msg_type == 'Ошибка':
         window_icon = QIcon('static/images/blue_LED.png')
         msg_icon = QMessageBox.Warning
-    elif msg_type == 'Проблема':
-        window_icon = QIcon('static/images/red_LED.png')
-        msg_icon = QMessageBox.Critical
     msg_window.setWindowTitle(msg_type + "!")
     msg_window.setWindowIcon(window_icon)
     msg_window.setIcon(msg_icon)
     msg_window.setText(msg)
     msg_window.exec_()
-    if msg_type == 'Проблема':
-        sys.exit()
 
 
 # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО КОЛИЧЕСТВА DI И DO
@@ -70,9 +68,9 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_ied_type.addItems(['БЭМП [РУ]'])
         self.select_ied()
 
+
         # инициализация параметров подключения
         self.find_ports()
-        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)
         self.ui.comboBox_speed.addItems(['2400', '4800', '9600', '19200', '38400', '56000', '57600', '115200'])
         self.ui.comboBox_speed.setCurrentIndex(4)
         self.ui.comboBox_parity.addItems(['N', 'E', 'O'])
@@ -90,9 +88,12 @@ class MyWindow(QtWidgets.QMainWindow):
         self.unit = 0x01
 
         # обработка событий
+        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)
         self.ui.pushButton_connect.clicked.connect(self.connecting)
         self.ui.pushButton_disconnect.clicked.connect(self.disconnecting)
         self.ui.comboBox_ied_type.activated.connect(self.select_ied)
+
+        # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
         self.ui.pushButton_DI_01.clicked.connect(self._testing)
@@ -124,21 +125,23 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ПОИСК COM-ПОРТОВ
     def find_ports(self):
+        print("Поиск COM-портов...")
+        self.statusBar().showMessage("Поиск COM-портов...")
         self.ui.comboBox_com_port.clear()
         try:
             port_list = serial.tools.list_ports.comports()
-            ports = sorted(list(map(lambda x: x.name, port_list)))
-            self.ui.comboBox_com_port.addItems(ports)
         except Exception:
             catch_exception()
             show_msg("Ошибка поиска COM-порта", 'Ошибка')
+        else:
+            ports = sorted(list(map(lambda x: x.name, port_list)))
+            self.ui.comboBox_com_port.addItems(ports)
+            print(f"Поиск завершен. Найдено COM-портов: {len(ports)}")
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connecting(self):
+        port = self.ui.comboBox_com_port.currentText()
         try:
-            port = self.ui.comboBox_com_port.currentText()
-            # if len(port) != 0
-            #     raise Exception
             self.client = ModbusSerialClient(
                 method='ASCII',
                 port=port,
@@ -147,20 +150,20 @@ class MyWindow(QtWidgets.QMainWindow):
                 parity=self.ui.comboBox_parity.currentText(),
                 stopbits=int(self.ui.comboBox_stopbits.currentText()),
             )
-            self.client.connect()
+            assert self.client.connect()
             assert self.client.is_socket_open()
+            pygame.init()                           # инициализация медиапроигрывателя
+            self.check_ied_params()                 # проверка параметров устройства
+            self.show_dio_buttons()                 # отображение актуального числа di и do
+            self.change_btn_style(True)             # активация/деактивация кнопок управления
+            self.thread_check_dio()
         except AssertionError:
             show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
         except Exception as e:
             catch_exception()
-            print(e)
-            show_msg(e, 'Проблема')
-        else:
-            self.check_ied_params()
-            self.show_dio_buttons()
-            self.change_btn_style(True)
-            pygame.init()
-            self.thread_check_dio()
+            show_msg()
+        # else:
+              # запуск опроса DI и DO
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
@@ -189,7 +192,7 @@ class MyWindow(QtWidgets.QMainWindow):
         except Exception as e:
             catch_exception()
             self.client.close()
-            show_msg(e, 'Проблема')
+            show_msg()
 
     # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО ЧИСЛА DI И DO
     def show_dio_buttons(self):
@@ -263,27 +266,29 @@ class MyWindow(QtWidgets.QMainWindow):
     def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
             checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits
+        except (AttributeError, ConnectionException):
+            QTimer.singleShot(0, self.ui.pushButton_disconnect.click)
+            sys.exit()
+            # show_msg('+')
+        except Exception:
+            catch_exception()
+            show_msg()
+        else:
             for i in range(max_dio):
                 dio = i + 1
                 if checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: rgb(51,204,51)')
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        self.voicing_dio(dio, dio_type, 'on')
+                        self.voicing_dio(dio, dio_type, 'включено')
                         print(1)
                     enabled_dio_list.add(dio)
                 else:
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     if dio in enabled_dio_list:
                         if not self.ui.radioButton_voicing_off.isChecked():
-                            self.voicing_dio(dio, dio_type, 'off')
+                            self.voicing_dio(dio, dio_type, 'отключено')
                             print(0)
                         enabled_dio_list.remove(dio)
-        except ConnectionException:
-            self.th_check_dio.run_flag = False
-            self.close()
-        except Exception:
-            catch_exception()
-            show_msg("Непредвиденная ошибка", 'Проблема')
 
     def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
@@ -294,7 +299,7 @@ class MyWindow(QtWidgets.QMainWindow):
                 song_time = song_dio_type.get_length() - 0.25
                 song_dio_type.play()
                 time.sleep(song_time)
-                song_dio = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/on-off/{state}+.wav')
+                song_dio = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/on-off/{state}.wav')
                 song_time = song_dio.get_length() - 0.1
                 song_dio.play()
                 time.sleep(song_time)
@@ -304,6 +309,9 @@ class MyWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self.disconnecting()
         event.accept()
+
+    def my_excepthook(type, value, traceback):
+        show_msg(f"Непредвиденная ошибка!\n{type}", value)
 
     def _testing(self):
         print('test!')
