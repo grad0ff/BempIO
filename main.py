@@ -1,10 +1,13 @@
 # pyuic5 BempIO.ui -o BempIO.py
+import asyncio
+import functools
 import logging
 import pygame
 import serial.tools.list_ports
 import sys
 import threading
 import time
+import math
 
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize, QTimer
@@ -52,6 +55,18 @@ def show_ied_dio(group_dio, max_dio):
     return dio_list[:max_dio]
 
 
+def decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        t1 = time.time()
+        func(*args, **kwargs)
+        t2 = time.time()
+        dt = t2 - t1
+        print(dt.conjugate())
+
+    return wrapper
+
+
 class MyWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
@@ -68,7 +83,6 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_ied_type.addItems(['БЭМП [РУ]'])
         self.select_ied()
 
-
         # инициализация параметров подключения
         self.find_ports()
         self.ui.comboBox_speed.addItems(['2400', '4800', '9600', '19200', '38400', '56000', '57600', '115200'])
@@ -80,7 +94,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.5
+        self.polling_time = 1
         self.max_di = 1
         self.max_do = 1
         self.enabled_di_list = set()
@@ -96,6 +110,7 @@ class MyWindow(QtWidgets.QMainWindow):
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
+        # тест
         self.ui.pushButton_DI_01.clicked.connect(self._testing)
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
@@ -152,18 +167,18 @@ class MyWindow(QtWidgets.QMainWindow):
             )
             assert self.client.connect()
             assert self.client.is_socket_open()
-            pygame.init()                           # инициализация медиапроигрывателя
-            self.check_ied_params()                 # проверка параметров устройства
-            self.show_dio_buttons()                 # отображение актуального числа di и do
-            self.change_btn_style(True)             # активация/деактивация кнопок управления
-            self.thread_check_dio()
+            pygame.init()  # инициализация медиапроигрывателя
+            self.check_ied_params()  # проверка параметров устройства
+            self.show_dio_buttons()  # отображение актуального числа di и do
+            self.change_btn_style(True)  # активация/деактивация кнопок управления
+            self.init_threads()
         except AssertionError:
             show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
         except Exception as e:
             catch_exception()
             show_msg()
         # else:
-              # запуск опроса DI и DO
+        # запуск опроса DI и DO
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
@@ -199,15 +214,12 @@ class MyWindow(QtWidgets.QMainWindow):
         self.di_list = show_ied_dio(self.ui.groupBox_di, self.max_di)
         self.do_list = show_ied_dio(self.ui.groupBox_do, self.max_do)
 
-    # ЗАПУСК ПОТОКА ОПРОСА DI И DO
-    def thread_check_dio(self):
+    # ИНИЦИАЛИЗАЦИЯ ПОТОК
+    def init_threads(self):
+        # запуск потока опроса опроса DI и DO
         self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
         self.th_check_dio.run_flag = True
         self.th_check_dio.start()
-
-        # self.th_voicing_dio = threading.Thread(target=self.voicing_dio, args=(None, None, None), name='th_voicing_dio')
-        # self.th_voicing_dio.run_flag = True
-        # self.th_voicing_dio.start()
 
     # ИЗМЕНЕНИЕ ВИДА КНОПОК НАСТРОЕК ПРИ ПОДКЛЮЧЕНИИ/ОТКЛЮЧЕНИИ
     def change_btn_style(self, value):
@@ -236,8 +248,8 @@ class MyWindow(QtWidgets.QMainWindow):
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
         self.ui.radioButton_voicing_off.setChecked(True)
-        # if self.th_voicing_dio.is_alive():
-        #     self.th_voicing_dio.run_flag = False
+        if self.th_voicing_dio.is_alive():
+            self.th_voicing_dio.run_flag = False
         if self.th_check_dio.is_alive():
             self.th_check_dio.run_flag = False
         while self.th_check_dio.is_alive():
@@ -257,12 +269,14 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ОПРОС DI и DO
     def check_dio(self):
+        i = 0
         while getattr(self.th_check_dio, 'run_flag', True):
             time.sleep(self.polling_time)
             self.checking_dio(self.di_address, self.max_di, self.di_list, self.enabled_di_list, 'DI')
             self.checking_dio(self.do_address, self.max_do, self.do_list, self.enabled_do_list, 'DO')
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
+    @decorator
     def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
             checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits
@@ -279,22 +293,25 @@ class MyWindow(QtWidgets.QMainWindow):
                 if checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: rgb(51,204,51)')
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        self.voicing_dio(dio, dio_type, 'включено')
+                        task = asyncio.create_task(self.voicing_dio(dio, dio_type, 'включено'))
+                        await task
                         print(1)
                     enabled_dio_list.add(dio)
                 else:
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     if dio in enabled_dio_list:
                         if not self.ui.radioButton_voicing_off.isChecked():
-                            self.voicing_dio(dio, dio_type, 'отключено')
-                            print(0)
+                            task = asyncio.create_task(self.voicing_dio(dio, dio_type, 'отключено'))
+                            await task
+
                         enabled_dio_list.remove(dio)
 
-    def voicing_dio(self, dio, dio_type, state):
+    async def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
                 (self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO') or \
                 self.ui.radioButton_dio_voicing.isChecked():
             try:
+                print(0)
                 song_dio_type = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav')
                 song_time = song_dio_type.get_length() - 0.25
                 song_dio_type.play()
@@ -315,12 +332,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
     def _testing(self):
         print('test!')
-        i = 0
-        while not self.client.is_socket_open():
-            time.sleep(1)
-            print(self.client.connect())
-            i += 1
-            print(i)
+        print(self.enabled_di_list)
 
 
 if __name__ == "__main__":
