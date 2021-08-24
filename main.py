@@ -1,5 +1,4 @@
 # pyuic5 BempIO.ui -o BempIO.py
-import asyncio
 import functools
 import logging
 import pygame
@@ -7,7 +6,6 @@ import serial.tools.list_ports
 import sys
 import threading
 import time
-import math
 
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize, QTimer
@@ -55,24 +53,13 @@ def show_ied_dio(group_dio, max_dio):
     return dio_list[:max_dio]
 
 
-def decorator(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        t1 = time.time()
-        func(*args, **kwargs)
-        t2 = time.time()
-        dt = t2 - t1
-        print(dt.conjugate())
-
-    return wrapper
-
-
 class MyWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.setWindowTitle('BempIO')
+        self.setWindowIcon(QIcon('static/images/BempIO.ico'))
         self.setFixedSize(760, 960)
         self.searh_port = self.ui.pushButton_searh_ports
         self.searh_port.setIcon(QIcon('static/images/find.svg'))
@@ -116,7 +103,9 @@ class MyWindow(QtWidgets.QMainWindow):
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
         self.ied_type = self.ui.comboBox_ied_type.currentText()
-        self.statusBar().showMessage(f"Выбрано устройство: {self.ied_type}")
+        msg = f"Выбрано устройство: {self.ied_type}"
+        print(msg)
+        self.statusBar().showMessage(msg)
         self.ui.lineEdit_di_01_address.setDisabled(True)
         self.ui.lineEdit_do_01_address.setDisabled(True)
         self.ui.spinBox_di_count.setDisabled(True)
@@ -140,18 +129,23 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ПОИСК COM-ПОРТОВ
     def find_ports(self):
-        print("Поиск COM-портов...")
-        self.statusBar().showMessage("Поиск COM-портов...")
+        msg = "Поиск COM-портов..."
+        print(msg)
+        self.statusBar().showMessage(msg)
         self.ui.comboBox_com_port.clear()
         try:
             port_list = serial.tools.list_ports.comports()
         except Exception:
             catch_exception()
-            show_msg("Ошибка поиска COM-порта", 'Ошибка')
+            msg = "Ошибка поиска COM-порта"
+            print(msg)
+            show_msg(msg, 'Ошибка')
         else:
             ports = sorted(list(map(lambda x: x.name, port_list)))
             self.ui.comboBox_com_port.addItems(ports)
-            print(f"Поиск завершен. Найдено COM-портов: {len(ports)}")
+            msg = f"Поиск завершен. Найдено COM-портов: {len(ports)}"
+            print(msg)
+            self.statusBar().showMessage(msg)
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connecting(self):
@@ -173,16 +167,21 @@ class MyWindow(QtWidgets.QMainWindow):
             self.change_btn_style(True)  # активация/деактивация кнопок управления
             self.init_threads()
         except AssertionError:
-            show_msg('Неправильные параметры подключения или COM-порт занят!', 'Ошибка')
+            msg = 'Неправильные параметры подключения или COM-порт занят!'
+            print(msg)
+            show_msg(msg, 'Ошибка')
         except Exception as e:
             catch_exception()
             show_msg()
+            print(e)
         # else:
         # запуск опроса DI и DO
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
-        self.statusBar().showMessage(f"Проверка параметров устройства {self.ied_type}")
+        msg = f"Проверка параметров устройства {self.ied_type}"
+        print(msg)
+        self.statusBar().showMessage(msg)
         try:
             # определение количества DI и DO в подключенном устройстве
             if self.ied_type == 'БЭМП [РУ]':
@@ -195,7 +194,9 @@ class MyWindow(QtWidgets.QMainWindow):
                 self.max_do = int(self.ui.spinBox_di_count.text())
             self.ui.spinBox_di_count.setValue(self.max_di)
             self.ui.spinBox_do_count.setValue(self.max_do)
-            print(f"Количество:\nDI - {self.max_di}\nDO - {self.max_do}")
+            msg = f"Количество:\nDI - {self.max_di}\nDO - {self.max_do}"
+            print(msg)
+            self.statusBar().showMessage(msg)
             di_01_address = self.ui.lineEdit_di_01_address.text()
             do_01_address = self.ui.lineEdit_do_01_address.text()
             # assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
@@ -203,10 +204,13 @@ class MyWindow(QtWidgets.QMainWindow):
             self.di_address = int(di_01_address, 16)
             self.do_address = int(do_01_address, 16)
         except AssertionError:
-            show_msg("Некорректные параметры DI и DO", 'Ошибка')
+            msg = "Некорректные параметры DI и DO"
+            print(msg)
+            show_msg(msg, 'Ошибка')
         except Exception as e:
             catch_exception()
             self.client.close()
+            print(msg)
             show_msg()
 
     # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО ЧИСЛА DI И DO
@@ -248,8 +252,6 @@ class MyWindow(QtWidgets.QMainWindow):
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
         self.ui.radioButton_voicing_off.setChecked(True)
-        if self.th_voicing_dio.is_alive():
-            self.th_voicing_dio.run_flag = False
         if self.th_check_dio.is_alive():
             self.th_check_dio.run_flag = False
         while self.th_check_dio.is_alive():
@@ -276,14 +278,13 @@ class MyWindow(QtWidgets.QMainWindow):
             self.checking_dio(self.do_address, self.max_do, self.do_list, self.enabled_do_list, 'DO')
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
-    @decorator
+    # @decorator
     def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
             checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits
         except (AttributeError, ConnectionException):
             QTimer.singleShot(0, self.ui.pushButton_disconnect.click)
             sys.exit()
-            # show_msg('+')
         except Exception:
             catch_exception()
             show_msg()
@@ -293,25 +294,20 @@ class MyWindow(QtWidgets.QMainWindow):
                 if checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: rgb(51,204,51)')
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        task = asyncio.create_task(self.voicing_dio(dio, dio_type, 'включено'))
-                        await task
-                        print(1)
+                        self.voicing_dio(dio, dio_type, 'включено')
                     enabled_dio_list.add(dio)
                 else:
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     if dio in enabled_dio_list:
                         if not self.ui.radioButton_voicing_off.isChecked():
-                            task = asyncio.create_task(self.voicing_dio(dio, dio_type, 'отключено'))
-                            await task
-
+                            self.voicing_dio(dio, dio_type, 'отключено')
                         enabled_dio_list.remove(dio)
 
-    async def voicing_dio(self, dio, dio_type, state):
+    def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
                 (self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO') or \
                 self.ui.radioButton_dio_voicing.isChecked():
             try:
-                print(0)
                 song_dio_type = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav')
                 song_time = song_dio_type.get_length() - 0.25
                 song_dio_type.play()
