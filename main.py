@@ -1,17 +1,16 @@
 # pyuic5 BempIO.ui -o BempIO.py
-import functools
 import logging
-import pygame
-import serial.tools.list_ports
+import os
 import sys
 import threading
 import time
 
+import pygame
+import serial.tools.list_ports
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize, QTimer
-from PyQt5.QtGui import QPalette, QIcon
+from PyQt5.QtGui import QPalette, QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
-
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
 
@@ -21,19 +20,19 @@ from BempIO import Ui_MainWindow
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
 def catch_exception():
     log = logging.getLogger()
-    log.exception('\n\t Новое исключение: \n')
+    log.exception('\n\t НОВОЕ ИСКЛЮЧЕНИЕ: \n')
 
 
 # ВЫВОД ОКНА С СООБЩЕНИЕМ
 def show_msg(msg=f"Непредвиденная ошибка!\n{sys.exc_info()}", msg_type="Проблема"):
     msg_window = QMessageBox()
-    window_icon = QIcon('static/images/red_LED.png')
+    window_icon = QIcon(resource_path('static/images/critical.ico'))
     msg_icon = QMessageBox.Critical
     if msg_type == 'Информация':
         msg_icon = QMessageBox.Information
-        window_icon = QIcon('static/images/green_LED.png')
+        window_icon = QIcon(resource_path('static/images/information.ico'))
     elif msg_type == 'Ошибка':
-        window_icon = QIcon('static/images/blue_LED.png')
+        window_icon = QIcon(resource_path('static/images/warning.ico'))
         msg_icon = QMessageBox.Warning
     msg_window.setWindowTitle(msg_type + "!")
     msg_window.setWindowIcon(window_icon)
@@ -53,16 +52,22 @@ def show_ied_dio(group_dio, max_dio):
     return dio_list[:max_dio]
 
 
+# ОПРЕДЕЛЕНИЕ ПУТИ ДЛЯ ФАЙЛОВ, ДОБАВЛЯЕМЫХ В *.exe
+def resource_path(relative_path):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
 class MyWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.setWindowTitle('BempIO')
-        self.setWindowIcon(QIcon('static/images/BempIO.ico'))
+        self.setWindowIcon(QIcon(resource_path('static/images/BempIO.ico')))
         self.setFixedSize(760, 960)
         self.searh_port = self.ui.pushButton_searh_ports
-        self.searh_port.setIcon(QIcon('static/images/find.svg'))
+        self.searh_port.setIcon(QIcon(resource_path('static/images/find.svg')))
         self.searh_port.setIconSize(QSize(15, 15))
         self.msg = QMessageBox()
 
@@ -81,7 +86,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 1
+        self.polling_time = 0.5
         self.max_di = 1
         self.max_do = 1
         self.enabled_di_list = set()
@@ -94,6 +99,10 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.clicked.connect(self.disconnecting)
         self.ui.comboBox_ied_type.activated.connect(self.select_ied)
 
+        # инициализация потока опроса DI и DO
+        self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
+        self.th_check_dio.run_flag = True
+
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
@@ -104,8 +113,8 @@ class MyWindow(QtWidgets.QMainWindow):
     def select_ied(self):
         self.ied_type = self.ui.comboBox_ied_type.currentText()
         msg = f"Выбрано устройство: {self.ied_type}"
-        print(msg)
         self.statusBar().showMessage(msg)
+        print(msg)
         self.ui.lineEdit_di_01_address.setDisabled(True)
         self.ui.lineEdit_do_01_address.setDisabled(True)
         self.ui.spinBox_di_count.setDisabled(True)
@@ -130,22 +139,22 @@ class MyWindow(QtWidgets.QMainWindow):
     # ПОИСК COM-ПОРТОВ
     def find_ports(self):
         msg = "Поиск COM-портов..."
-        print(msg)
         self.statusBar().showMessage(msg)
+        print(msg)
         self.ui.comboBox_com_port.clear()
         try:
             port_list = serial.tools.list_ports.comports()
         except Exception:
             catch_exception()
             msg = "Ошибка поиска COM-порта"
-            print(msg)
             show_msg(msg, 'Ошибка')
+            print(msg)
         else:
             ports = sorted(list(map(lambda x: x.name, port_list)))
             self.ui.comboBox_com_port.addItems(ports)
-            msg = f"Поиск завершен. Найдено COM-портов: {len(ports)}"
-            print(msg)
+            msg = f"Поиск завершен. Найдено COM-портов:  {len(ports)}"
             self.statusBar().showMessage(msg)
+            print(msg)
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connecting(self):
@@ -159,23 +168,29 @@ class MyWindow(QtWidgets.QMainWindow):
                 parity=self.ui.comboBox_parity.currentText(),
                 stopbits=int(self.ui.comboBox_stopbits.currentText()),
             )
-            assert self.client.connect()
-            assert self.client.is_socket_open()
-            pygame.init()  # инициализация медиапроигрывателя
-            self.check_ied_params()  # проверка параметров устройства
-            self.show_dio_buttons()  # отображение актуального числа di и do
-            self.change_btn_style(True)  # активация/деактивация кнопок управления
-            self.init_threads()
-        except AssertionError:
-            msg = 'Неправильные параметры подключения или COM-порт занят!'
-            print(msg)
-            show_msg(msg, 'Ошибка')
         except Exception as e:
             catch_exception()
             show_msg()
-            print(e)
-        # else:
-        # запуск опроса DI и DO
+        else:
+            try:
+                assert self.client.connect()
+                assert self.client.is_socket_open()
+            except AssertionError:
+                msg = 'Неправильные параметры подключения или COM-порт занят!'
+                print(msg)
+                show_msg(msg, 'Ошибка')
+            except Exception as e:
+                catch_exception()
+                show_msg()
+            else:
+                msg = f"Устройство подключено!"
+                self.statusBar().showMessage(msg)
+                print(msg)
+                pygame.init()  # инициализация медиапроигрывателя
+                self.check_ied_params()  # проверка параметров устройства
+                self.show_dio_buttons()  # отображение актуального числа di и do
+                self.change_btn_style(True)  # активация/деактивация кнопок управления
+                self.init_threads()
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
@@ -194,23 +209,22 @@ class MyWindow(QtWidgets.QMainWindow):
                 self.max_do = int(self.ui.spinBox_di_count.text())
             self.ui.spinBox_di_count.setValue(self.max_di)
             self.ui.spinBox_do_count.setValue(self.max_do)
-            msg = f"Количество:\nDI - {self.max_di}\nDO - {self.max_do}"
-            print(msg)
+            msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
             self.statusBar().showMessage(msg)
+            print(msg)
             di_01_address = self.ui.lineEdit_di_01_address.text()
             do_01_address = self.ui.lineEdit_do_01_address.text()
             # assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
             # assert isinstance(int(do_01_address, 16), int), "Неправильный адрес DO 1 "
             self.di_address = int(di_01_address, 16)
             self.do_address = int(do_01_address, 16)
-        except AssertionError:
-            msg = "Некорректные параметры DI и DO"
-            print(msg)
-            show_msg(msg, 'Ошибка')
+        # except AssertionError:
+        #     msg = "Некорректные параметры DI и DO"
+        #     print(msg)
+        #     show_msg(msg, 'Ошибка')
         except Exception as e:
             catch_exception()
             self.client.close()
-            print(msg)
             show_msg()
 
     # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО ЧИСЛА DI И DO
@@ -220,10 +234,16 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ИНИЦИАЛИЗАЦИЯ ПОТОК
     def init_threads(self):
-        # запуск потока опроса опроса DI и DO
-        self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
-        self.th_check_dio.run_flag = True
-        self.th_check_dio.start()
+        try:
+            # запуск потока опроса  DI и DO
+            self.th_check_dio.start()
+        except Exception as e:
+            catch_exception()
+            show_msg()
+        else:
+            msg = "Запущен опрос DI и DO"
+            self.statusBar().showMessage(msg)
+            print(msg)
 
     # ИЗМЕНЕНИЕ ВИДА КНОПОК НАСТРОЕК ПРИ ПОДКЛЮЧЕНИИ/ОТКЛЮЧЕНИИ
     def change_btn_style(self, value):
@@ -247,21 +267,25 @@ class MyWindow(QtWidgets.QMainWindow):
             self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
             self.ui.pushButton_disconnect.setText('Отключено')
             self.statusBar().showMessage(f"Устройство {self.ied_type} отключено!")
-            self.select_ied()
 
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
         self.ui.radioButton_voicing_off.setChecked(True)
-        if self.th_check_dio.is_alive():
-            self.th_check_dio.run_flag = False
-        while self.th_check_dio.is_alive():
-            pass
-        self.client.close()
-        self.select_ied()
-        self.change_btn_style(False)
-        self.unselect_dio(self.ui.groupBox_di)
-        self.unselect_dio(self.ui.groupBox_do)
-        pygame.quit()
+        try:
+            if self.th_check_dio.is_alive():
+                self.th_check_dio.run_flag = False
+            while self.th_check_dio.is_alive():
+                pass
+        except Exception as e:
+            catch_exception()
+            show_msg()
+        else:
+            self.client.close()
+            self.select_ied()
+            self.change_btn_style(False)
+            self.unselect_dio(self.ui.groupBox_di)
+            self.unselect_dio(self.ui.groupBox_do)
+            pygame.quit()
 
     # ОТОБРАЖЕНИЕ РАНЕЕ СКРЫТЫХ КНОПОК
     def unselect_dio(self, group_dio):
@@ -292,43 +316,44 @@ class MyWindow(QtWidgets.QMainWindow):
             for i in range(max_dio):
                 dio = i + 1
                 if checked_dio_list[i]:
-                    dio_list[i].setStyleSheet('background: rgb(51,204,51)')
+                    # print(f"{dio_type}{dio} - ON")
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
                         self.voicing_dio(dio, dio_type, 'включено')
                     enabled_dio_list.add(dio)
-                else:
-                    dio_list[i].setStyleSheet('background: #f0f0f0')
+                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
+                    dio_list[i].setStyleSheet('background: rgb(51,204,51)')
+                if not checked_dio_list[i]:
                     if dio in enabled_dio_list:
                         if not self.ui.radioButton_voicing_off.isChecked():
                             self.voicing_dio(dio, dio_type, 'отключено')
                         enabled_dio_list.remove(dio)
+                    dio_list[i].setStyleSheet('background: #f0f0f0')
+                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
                 (self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO') or \
                 self.ui.radioButton_dio_voicing.isChecked():
             try:
-                song_dio_type = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav')
+                song_dio_type = pygame.mixer.Sound(
+                    resource_path(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav'))
                 song_time = song_dio_type.get_length() - 0.25
                 song_dio_type.play()
                 time.sleep(song_time)
-                song_dio = pygame.mixer.Sound(f'static/voicing/{self.voice_type}/on-off/{state}.wav')
+                song_dio = pygame.mixer.Sound(resource_path(f'static//voicing/{self.voice_type}/on-off/{state}.wav'))
                 song_time = song_dio.get_length() - 0.1
                 song_dio.play()
                 time.sleep(song_time)
             except Exception as e:
-                print(e)
+                catch_exception()
+                show_msg()
 
     def closeEvent(self, event):
         self.disconnecting()
         event.accept()
 
-    def my_excepthook(type, value, traceback):
-        show_msg(f"Непредвиденная ошибка!\n{type}", value)
-
     def _testing(self):
         print('test!')
-        print(self.enabled_di_list)
 
 
 if __name__ == "__main__":
