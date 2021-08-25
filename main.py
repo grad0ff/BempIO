@@ -99,10 +99,6 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.clicked.connect(self.disconnecting)
         self.ui.comboBox_ied_type.activated.connect(self.select_ied)
 
-        # инициализация потока опроса DI и DO
-        self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
-        self.th_check_dio.run_flag = True
-
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
@@ -232,10 +228,11 @@ class MyWindow(QtWidgets.QMainWindow):
         self.di_list = show_ied_dio(self.ui.groupBox_di, self.max_di)
         self.do_list = show_ied_dio(self.ui.groupBox_do, self.max_do)
 
-    # ИНИЦИАЛИЗАЦИЯ ПОТОК
+    # ИНИЦИАЛИЗАЦИЯ ПОТОКА ОПРОСА  DI и DO
     def init_threads(self):
+        self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
+        self.th_check_dio.run_flag = True
         try:
-            # запуск потока опроса  DI и DO
             self.th_check_dio.start()
         except Exception as e:
             catch_exception()
@@ -292,6 +289,7 @@ class MyWindow(QtWidgets.QMainWindow):
         for dio in group_dio.findChildren(QtWidgets.QPushButton):
             dio.setVisible(True)
             dio.setStyleSheet('background: #f0f0f0')
+            dio.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     # ОПРОС DI и DO
     def check_dio(self):
@@ -317,18 +315,19 @@ class MyWindow(QtWidgets.QMainWindow):
                 dio = i + 1
                 if checked_dio_list[i]:
                     # print(f"{dio_type}{dio} - ON")
+                    dio_list[i].setStyleSheet('background: rgb(51,204,51)')
+                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
                         self.voicing_dio(dio, dio_type, 'включено')
                     enabled_dio_list.add(dio)
-                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
-                    dio_list[i].setStyleSheet('background: rgb(51,204,51)')
-                if not checked_dio_list[i]:
-                    if dio in enabled_dio_list:
-                        if not self.ui.radioButton_voicing_off.isChecked():
-                            self.voicing_dio(dio, dio_type, 'отключено')
-                        enabled_dio_list.remove(dio)
+                    time.sleep(0.005)
+                elif not checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
+                    if dio in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
+                        self.voicing_dio(dio, dio_type, 'отключено')
+                        enabled_dio_list.remove(dio)
+                    time.sleep(0.005)
 
     def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
@@ -337,14 +336,14 @@ class MyWindow(QtWidgets.QMainWindow):
             try:
                 song_dio_type = pygame.mixer.Sound(
                     resource_path(f'static/voicing/{self.voice_type}/{dio_type}/{dio}.wav'))
-                song_time = song_dio_type.get_length() - 0.25
+                song_time = song_dio_type.get_length() - 0.3
                 song_dio_type.play()
                 time.sleep(song_time)
                 song_dio = pygame.mixer.Sound(resource_path(f'static//voicing/{self.voice_type}/on-off/{state}.wav'))
                 song_time = song_dio.get_length() - 0.1
                 song_dio.play()
                 time.sleep(song_time)
-            except Exception as e:
+            except Exception:
                 catch_exception()
                 show_msg()
 
