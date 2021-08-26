@@ -327,9 +327,10 @@ class MyWindow(QtWidgets.QMainWindow):
                 elif not checked_dio_list[i]:
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
-                    if dio in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        self.voicing_dio(dio, dio_type, 'отключено')
+                    if dio in enabled_dio_list:
                         enabled_dio_list.remove(dio)
+                        if not self.ui.radioButton_voicing_off.isChecked():
+                            self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
 
     def voicing_dio(self, dio, dio_type, state):
