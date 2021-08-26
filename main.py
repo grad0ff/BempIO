@@ -1,6 +1,7 @@
 # pyuic5 BempIO.ui -o BempIO.py
 import logging
 import os
+import signal
 import sys
 import threading
 import time
@@ -102,8 +103,10 @@ class MyWindow(QtWidgets.QMainWindow):
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
+        self.selected_di = ()
+        self.selected_do = ()
+
         # тест
-        self.ui.pushButton_DI_01.clicked.connect(self._testing)
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
@@ -350,9 +353,6 @@ class MyWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self.disconnecting()
         event.accept()
-
-    def _testing(self):
-        print('test!')
 
 
 if __name__ == "__main__":
