@@ -1,21 +1,19 @@
 # pyuic5 BempIO.ui -o BempIO.py
 import logging
 import os
-import signal
 import sys
 import threading
 import time
-
 import pygame
 import serial.tools.list_ports
+
+from BempIO import Ui_MainWindow
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize, QTimer
 from PyQt5.QtGui import QPalette, QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
-
-from BempIO import Ui_MainWindow
 
 
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
@@ -107,6 +105,9 @@ class MyWindow(QtWidgets.QMainWindow):
         self.selected_do = ()
 
         # тест
+
+    def _testing(self):
+        pass
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
@@ -318,10 +319,14 @@ class MyWindow(QtWidgets.QMainWindow):
                 dio = i + 1
                 if checked_dio_list[i]:
                     # print(f"{dio_type}{dio} - ON")
-                    dio_list[i].setStyleSheet('background: rgb(51,204,51)')
+                    if dio_list[i].isChecked():
+                        dio_list[i].setStyleSheet('background: rgb(150,200,250)')
+                    else:
+                        dio_list[i].setStyleSheet('background: rgb(50,255,50)')
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        self.voicing_dio(dio, dio_type, 'включено')
+                        if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:
+                            self.voicing_dio(dio, dio_type, 'включено')
                     enabled_dio_list.add(dio)
                     time.sleep(0.005)
                 elif not checked_dio_list[i]:
@@ -330,7 +335,8 @@ class MyWindow(QtWidgets.QMainWindow):
                     if dio in enabled_dio_list:
                         enabled_dio_list.remove(dio)
                         if not self.ui.radioButton_voicing_off.isChecked():
-                            self.voicing_dio(dio, dio_type, 'отключено')
+                            if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:
+                                self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
 
     def voicing_dio(self, dio, dio_type, state):
