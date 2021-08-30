@@ -1,4 +1,6 @@
 # pyuic5 BempIO.ui -o BempIO.py
+
+import functools
 import logging
 import os
 import sys
@@ -14,6 +16,18 @@ from PyQt5.QtGui import QPalette, QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
+
+
+#  ДЕКОРТАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
+def time_check(func):
+    @functools.wraps(func)
+    def wrapper(*args):
+        t1 = time.time()
+        func(*args)
+        t2 = time.time()
+        print(func.__name__, t2 - t1)
+
+    return wrapper
 
 
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
@@ -85,7 +99,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.5
+        self.polling_time = 0.25
         self.max_di = 1
         self.max_do = 1
         self.enabled_di_list = set()
@@ -101,11 +115,9 @@ class MyWindow(QtWidgets.QMainWindow):
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
-        self.selected_di = ()
-        self.selected_do = ()
+        # тест фичи
 
-        # тест
-
+    # ТЕСТИРОВАНИЕ ФИЧИ
     def _testing(self):
         pass
 
@@ -186,11 +198,11 @@ class MyWindow(QtWidgets.QMainWindow):
                 msg = f"Устройство подключено!"
                 self.statusBar().showMessage(msg)
                 print(msg)
-                pygame.init()  # инициализация медиапроигрывателя
                 self.check_ied_params()  # проверка параметров устройства
                 self.show_dio_buttons()  # отображение актуального числа di и do
                 self.change_btn_style(True)  # активация/деактивация кнопок управления
-                self.init_threads()
+                self.run_threads()
+                pygame.init()  # инициализация медиапроигрывателя
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
@@ -233,7 +245,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.do_list = show_ied_dio(self.ui.groupBox_do, self.max_do)
 
     # ИНИЦИАЛИЗАЦИЯ ПОТОКА ОПРОСА  DI и DO
-    def init_threads(self):
+    def run_threads(self):
         self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
         self.th_check_dio.run_flag = True
         try:
@@ -277,6 +289,8 @@ class MyWindow(QtWidgets.QMainWindow):
                 self.th_check_dio.run_flag = False
             while self.th_check_dio.is_alive():
                 pass
+        except AttributeError:
+            pass
         except Exception as e:
             catch_exception()
             show_msg()
@@ -288,9 +302,10 @@ class MyWindow(QtWidgets.QMainWindow):
             self.unselect_dio(self.ui.groupBox_do)
             pygame.quit()
 
-    # ОТОБРАЖЕНИЕ РАНЕЕ СКРЫТЫХ КНОПОК
+    # ОТОБРАЖЕНИЕ РАНЕЕ СКРЫТЫХ DI и DO
     def unselect_dio(self, group_dio):
         for dio in group_dio.findChildren(QtWidgets.QPushButton):
+            dio.setChecked(False)
             dio.setVisible(True)
             dio.setStyleSheet('background: #f0f0f0')
             dio.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
@@ -304,10 +319,9 @@ class MyWindow(QtWidgets.QMainWindow):
             self.checking_dio(self.do_address, self.max_do, self.do_list, self.enabled_do_list, 'DO')
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
-    # @decorator
     def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
-            checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits
+            checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
         except (AttributeError, ConnectionException):
             QTimer.singleShot(0, self.ui.pushButton_disconnect.click)
             sys.exit()
@@ -317,28 +331,36 @@ class MyWindow(QtWidgets.QMainWindow):
         else:
             for i in range(max_dio):
                 dio = i + 1
-                if checked_dio_list[i]:
-                    # print(f"{dio_type}{dio} - ON")
-                    if dio_list[i].isChecked():
+                if checked_dio_list[i]:  # если DIO сработал
+                    if dio_list[i].isChecked():  # и если нажата кнопка DIO
                         dio_list[i].setStyleSheet('background: rgb(150,200,250)')
                     else:
                         dio_list[i].setStyleSheet('background: rgb(50,255,50)')
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
-                    if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():
-                        if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:
+                    if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():  # если DIO не
+                        # в списке сработавших и включено озвучивание DIO
+                        if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:  # если хоть одна кнопка нажата,
+                            # то озвучивается только соответствующий DIO
                             self.voicing_dio(dio, dio_type, 'включено')
-                    enabled_dio_list.add(dio)
+                    enabled_dio_list.add(dio)  # DIO добавляется в список сработавших
                     time.sleep(0.005)
-                elif not checked_dio_list[i]:
+                elif not checked_dio_list[i]:  # если DIO отключился
                     dio_list[i].setStyleSheet('background: #f0f0f0')
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
-                    if dio in enabled_dio_list:
-                        enabled_dio_list.remove(dio)
-                        if not self.ui.radioButton_voicing_off.isChecked():
-                            if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:
+                    if dio in enabled_dio_list:  # если DIO находится в списке сработавших
+                        enabled_dio_list.remove(dio)  # DIO удаляется из списка сработавших
+                        if not self.ui.radioButton_voicing_off.isChecked():  # если включено озвучивание DIO
+                            if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:  # если хоть одна кнопка
+                                # нажата, то озвучивается только соответствующий DIO
                                 self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
+                if self.ui.radioButton_voicing_off.isChecked():
+                    dio_list[i].setCheckable(False)
+                    dio_list[i].setChecked(False)
+                else:
+                    dio_list[i].setCheckable(True)
 
+    # ОЗВУЧИВАНИЕ DI И DO
     def voicing_dio(self, dio, dio_type, state):
         if (self.ui.radioButton_di_voicing.isChecked() and dio_type == 'DI') or \
                 (self.ui.radioButton_do_voicing.isChecked() and dio_type == 'DO') or \
@@ -357,6 +379,7 @@ class MyWindow(QtWidgets.QMainWindow):
                 catch_exception()
                 show_msg()
 
+    # ЗАВЕРШЕНИЕ РАБОТЫ ПРОГРАММЫ
     def closeEvent(self, event):
         self.disconnecting()
         event.accept()

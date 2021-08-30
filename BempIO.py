@@ -612,7 +612,7 @@ class Ui_MainWindow(object):
         self.gridLayout_1.addWidget(self.pushButton_DI_91, 10, 5, 1, 1)
         self.groupBox_dio_settings = QtWidgets.QGroupBox(self.mainwidget)
         self.groupBox_dio_settings.setGeometry(QtCore.QRect(10, 10, 741, 111))
-        self.groupBox_dio_settings.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.groupBox_dio_settings.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.groupBox_dio_settings.setObjectName("groupBox_dio_settings")
         self.horizontalLayoutWidget_3 = QtWidgets.QWidget(self.groupBox_dio_settings)
         self.horizontalLayoutWidget_3.setGeometry(QtCore.QRect(10, 30, 721, 71))
@@ -687,7 +687,8 @@ class Ui_MainWindow(object):
         self.groupBox_connect_settings = QtWidgets.QGroupBox(self.mainwidget)
         self.groupBox_connect_settings.setEnabled(True)
         self.groupBox_connect_settings.setGeometry(QtCore.QRect(10, 130, 621, 111))
-        self.groupBox_connect_settings.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.groupBox_connect_settings.setAlignment(
+            QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.groupBox_connect_settings.setObjectName("groupBox_connect_settings")
         self.horizontalLayoutWidget = QtWidgets.QWidget(self.groupBox_connect_settings)
         self.horizontalLayoutWidget.setGeometry(QtCore.QRect(10, 30, 601, 70))
