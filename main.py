@@ -16,9 +16,10 @@ from PyQt5.QtGui import QPalette, QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
+from my_classes import DI0_Button
 
 
-#  ДЕКОРТАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
+#  ДЕКОРАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
 def time_check(func):
     @functools.wraps(func)
     def wrapper(*args):
@@ -354,9 +355,10 @@ class MyWindow(QtWidgets.QMainWindow):
                                 # нажата, то озвучивается только соответствующий DIO
                                 self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
-                if self.ui.radioButton_voicing_off.isChecked():
+                if self.ui.radioButton_voicing_off.isChecked():  # если озвучивание DIO отключено
                     dio_list[i].setCheckable(False)
                     dio_list[i].setChecked(False)
+                    DI0_Button.PRESSED_BUTTONS = 0
                 else:
                     dio_list[i].setCheckable(True)
 
