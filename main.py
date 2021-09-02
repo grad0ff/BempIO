@@ -100,7 +100,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.25
+        self.polling_time = 0.5
         self.max_di = 1
         self.max_do = 1
         self.enabled_di_list = set()
@@ -350,10 +350,10 @@ class MyWindow(QtWidgets.QMainWindow):
                     dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
                     if dio in enabled_dio_list:  # если DIO находится в списке сработавших
                         enabled_dio_list.remove(dio)  # DIO удаляется из списка сработавших
-                        if not self.ui.radioButton_voicing_off.isChecked():  # если включено озвучивание DIO
-                            if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:  # если хоть одна кнопка
-                                # нажата, то озвучивается только соответствующий DIO
-                                self.voicing_dio(dio, dio_type, 'отключено')
+                        # if not self.ui.radioButton_voicing_off.isChecked():  # если включено озвучивание DIO
+                        #     if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:  # если хоть одна кнопка
+                        #         # нажата, то озвучивается только соответствующий DIO
+                        #         self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
                 if self.ui.radioButton_voicing_off.isChecked():  # если озвучивание DIO отключено
                     dio_list[i].setCheckable(False)
