@@ -16,7 +16,7 @@ from PyQt5.QtGui import QPalette, QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
-from my_classes import DI0_Button
+from my_classes import DI0_Button, DI_Button, DO_Button
 
 
 #  ДЕКОРАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
@@ -100,7 +100,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.5
+        self.polling_time = 0.25
         self.max_di = 1
         self.max_do = 1
         self.enabled_di_list = set()
@@ -322,7 +322,7 @@ class MyWindow(QtWidgets.QMainWindow):
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
     def checking_dio(self, dio_address, max_dio, dio_list, enabled_dio_list, dio_type):
         try:
-            checked_dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
+            dio_list_request = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
         except (AttributeError, ConnectionException):
             QTimer.singleShot(0, self.ui.pushButton_disconnect.click)
             sys.exit()
@@ -332,12 +332,11 @@ class MyWindow(QtWidgets.QMainWindow):
         else:
             for i in range(max_dio):
                 dio = i + 1
-                if checked_dio_list[i]:  # если DIO сработал
+                if dio_list_request[i]:  # если DIO сработал
                     if dio_list[i].isChecked():  # и если нажата кнопка DIO
-                        dio_list[i].setStyleSheet('background: rgb(150,200,250)')
+                        dio_list[i].change_style('checked')
                     else:
-                        dio_list[i].setStyleSheet('background: rgb(50,255,50)')
-                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
+                        dio_list[i].change_style('triggered')
                     if dio not in enabled_dio_list and not self.ui.radioButton_voicing_off.isChecked():  # если DIO не
                         # в списке сработавших и включено озвучивание DIO
                         if dio_list[i].isChecked() or dio_list[i].PRESSED_BUTTONS == 0:  # если хоть одна кнопка нажата,
@@ -345,9 +344,8 @@ class MyWindow(QtWidgets.QMainWindow):
                             self.voicing_dio(dio, dio_type, 'включено')
                     enabled_dio_list.add(dio)  # DIO добавляется в список сработавших
                     time.sleep(0.005)
-                elif not checked_dio_list[i]:  # если DIO отключился
-                    dio_list[i].setStyleSheet('background: #f0f0f0')
-                    dio_list[i].setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
+                elif not dio_list_request[i]:  # если DIO отключился
+                    dio_list[i].change_style('default')
                     if dio in enabled_dio_list:  # если DIO находится в списке сработавших
                         enabled_dio_list.remove(dio)  # DIO удаляется из списка сработавших
                         # if not self.ui.radioButton_voicing_off.isChecked():  # если включено озвучивание DIO
@@ -355,12 +353,15 @@ class MyWindow(QtWidgets.QMainWindow):
                         #         # нажата, то озвучивается только соответствующий DIO
                         #         self.voicing_dio(dio, dio_type, 'отключено')
                     time.sleep(0.005)
-                if self.ui.radioButton_voicing_off.isChecked():  # если озвучивание DIO отключено
+                if self.ui.radioButton_di_voicing.isChecked() and isinstance(dio_list[i], DI_Button) or \
+                        self.ui.radioButton_do_voicing.isChecked() and isinstance(dio_list[i], DO_Button) or \
+                        self.ui.radioButton_dio_voicing.isChecked():
+                    dio_list[i].setCheckable(True)
+                else:
+                    # self.ui.radioButton_voicing_off.isChecked():  # если озвучивание DIO отключено
                     dio_list[i].setCheckable(False)
                     dio_list[i].setChecked(False)
                     DI0_Button.PRESSED_BUTTONS = 0
-                else:
-                    dio_list[i].setCheckable(True)
 
     # ОЗВУЧИВАНИЕ DI И DO
     def voicing_dio(self, dio, dio_type, state):
@@ -389,9 +390,11 @@ class MyWindow(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
-    application = MyWindow()
-    application.show()
     app.setStyle('Fusion')
-    qp = QPalette()
-    app.setPalette(qp)
-    sys.exit(app.exec())
+    application = MyWindow()
+    try:
+        application.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        catch_exception()
+        show_msg()
