@@ -3,18 +3,38 @@ from PyQt5.QtGui import QFont
 
 
 class DI0_Button(QPushButton):
-    PRESSED_BUTTONS = 0
+    BUTTONS_IS_PRESSED = False
+
+    def __init__(self, *args):
+        super().__init__()
+        self.__isTriggered = False
 
     def mousePressEvent(self, event):
-        if not self.isChecked():
-            self.setChecked(True)
-            DI0_Button.PRESSED_BUTTONS += 1
+        if self.isCheckable():
+            if not self.isChecked():
+                self.setChecked(True)
+            else:
+                self.setChecked(False)
+            DI0_Button.BUTTONS_IS_PRESSED = True
+
+    def set_btn_num(self, num):
+        self.num = num
+
+    def setTriggered(self, val):
+        self.__isTriggered = val
+        self.change_triggered_style()
+
+    def isTriggered(self):
+        return self.__isTriggered
+
+    def change_triggered_style(self):
+        if self.isTriggered():
+            if self.isChecked():  # если нажата кнопка DIO, то при срабатывании
+                self.change_style('checked')  # цвет меняется на синий
+            else:
+                self.change_style('triggered')  # цвет меняется на зеленый
         else:
-            self.setChecked(False)
-            DI0_Button.PRESSED_BUTTONS -= 1
-
-
-class DIO_Button_Style(QPushButton):
+            self.change_style('default')  # цвет меняется на исходный
 
     def change_style(self, state):
         if state == 'default':
@@ -28,13 +48,17 @@ class DIO_Button_Style(QPushButton):
             self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Bold))
 
 
-class DI_Button(DI0_Button, DIO_Button_Style):
+class DI_Button(DI0_Button):
+    TYPE = 'DI'
+    TRIGGERED_LIST = set()
 
-    def mousePressEvent(self, event):
-        DI0_Button.mousePressEvent(self, event)
+# def mousePressEvent(self, event):
+#     DI0_Button.mousePressEvent(self, event)
 
 
-class DO_Button(DI0_Button, DIO_Button_Style):
+class DO_Button(DI0_Button):
+    TYPE = 'DO'
+    TRIGGERED_LIST = set()
 
-    def mousePressEvent(self, event):
-        DI0_Button.mousePressEvent(self, event)
+# def mousePressEvent(self, event):
+#     DI0_Button.mousePressEvent(self, event)
