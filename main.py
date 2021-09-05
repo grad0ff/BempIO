@@ -16,7 +16,7 @@ from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
-from my_classes import DI0_Button
+from my_classes import *
 
 
 #  ДЕКОРАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
@@ -34,18 +34,18 @@ def time_check(func):
 # ДЕТАЛИЗАЦИЯ ИСКЛЮЧЕНИЙ
 def catch_exception():
     log = logging.getLogger()
-    log.exception('\n\t НОВОЕ ИСКЛЮЧЕНИЕ: \n')
+    log.exception(f'\n\t НОВОЕ ИСКЛЮЧЕНИЕ: {sys.exc_info()}\n')
 
 
 # ВЫВОД ОКНА С СООБЩЕНИЕМ
-def show_msg(msg=f"Непредвиденная ошибка!\n{sys.exc_info()}", msg_type="trouble"):
+def show_msg(msg=f"Непредвиденная ошибка!\n{sys.exc_info()}", msg_type="Проблема"):
     msg_window = QMessageBox()
     window_icon = QIcon(resource_path('static/images/critical.ico'))
     msg_icon = QMessageBox.Critical
-    if msg_type == 'inform':
+    if msg_type == 'Информация':
         msg_icon = QMessageBox.Information
         window_icon = QIcon(resource_path('static/images/information.ico'))
-    elif msg_type == 'error':
+    elif msg_type == 'Ошибка':
         window_icon = QIcon(resource_path('static/images/warning.ico'))
         msg_icon = QMessageBox.Warning
     msg_window.setWindowTitle(msg_type + "!")
@@ -100,11 +100,9 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.25
+        self.polling_time = 0.5
         self.max_di = 1
         self.max_do = 1
-        self.enabled_di_list = set()
-        self.enabled_do_list = set()
         self.unit = 0x01
 
         # обработка событий
@@ -120,7 +118,10 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ТЕСТИРОВАНИЕ ФИЧЕЙ
     def _testing(self):
-        pass
+        try:
+            pass
+        except Exception:
+            catch_exception()
 
     # ВЫБОР УСТРОЙСТВА ИЗ ВЫПАДАЮЩЕГО СПИСКА
     def select_ied(self):
@@ -157,8 +158,8 @@ class MyWindow(QtWidgets.QMainWindow):
             port_list = serial.tools.list_ports.comports()
         except Exception:
             catch_exception()
-            msg = "Ошибка поиска COM-порта"
-            show_msg(msg, 'error')
+            msg = "Ошибка поиска COM-порта!"
+            show_msg(msg, 'Ошибка')
         else:
             ports = sorted(list(map(lambda x: x.name, port_list)))
             self.ui.comboBox_com_port.addItems(ports)
@@ -182,23 +183,25 @@ class MyWindow(QtWidgets.QMainWindow):
             )
         except Exception:
             catch_exception()
-            show_msg()
+            msg = "Ошибка проверки связи с устройством!"
+            show_msg(msg, 'Ошибка')
         else:
             try:
                 assert self.client.connect()
                 assert self.client.is_socket_open()
             except AssertionError:
                 msg = 'Неправильные параметры подключения или COM-порт занят!'
-                show_msg(msg, 'error')
+                self.send_msg(msg)
+                show_msg(msg, 'Ошибка')
             except Exception:
                 catch_exception()
                 show_msg()
             else:
-                msg = f"Связь установлена!"
+                msg = f"Связь c {self.ied_type} установлена!"
                 self.send_msg(msg)
                 self.check_ied_params()  # проверка параметров устройства
                 self.show_dio_buttons()  # отображение актуального числа di и do
-                self.change_btns_style(True)  # активация/деактивация кнопок управления
+                self.change_buttons_style(True)  # активация/деактивация кнопок управления
                 self.run_threads()
                 pygame.init()  # инициализация медиапроигрывателя
                 msg = f"Устройство {self.ied_type} подключено!"
@@ -208,35 +211,57 @@ class MyWindow(QtWidgets.QMainWindow):
     def check_ied_params(self):
         msg = f"Проверка параметров устройства {self.ied_type}..."
         self.send_msg(msg)
+        self.check_max_dio()
+        self.check_dio_01_address()
+
+    # ОПРЕДЕЛЕНИЕ КОЛИЧЕСТВА DI И DO В ПОДКЛЮЧЕННОМ УСТРОЙСТВЕ
+    def check_max_dio(self):
         try:
-            # определение количества DI и DO в подключенном устройстве
             if self.ied_type == 'БЭМП [РУ]':
-                self.max_di = self.client.read_holding_registers(0x0100, 1, unit=self.unit).registers[0]
-                self.max_do = self.client.read_holding_registers(0x0101, 1, unit=self.unit).registers[0]
-                assert isinstance(self.max_di, int), 'Неправильный адрес DI 1 БЭМП [РУ]'
-                assert isinstance(self.max_do, int), 'Неправильный адрес DO 1 БЭМП [РУ]'
+                try:
+                    self.max_di = self.client.read_holding_registers(0x0100, 1, unit=self.unit).registers[0]
+                    self.max_do = self.client.read_holding_registers(0x0101, 1, unit=self.unit).registers[0]
+                except Exception:
+                    catch_exception()
+                    msg = "Ошибка чтения количества DI и DO"
+                    show_msg(msg, 'Ошибка')
             elif self.ied_type == 'Прочее':
                 self.max_di = int(self.ui.spinBox_di_count.text())
                 self.max_do = int(self.ui.spinBox_di_count.text())
-            self.ui.spinBox_di_count.setValue(self.max_di)
-            self.ui.spinBox_do_count.setValue(self.max_do)
-            msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
-            di_01_address = self.ui.lineEdit_di_01_address.text()
-            do_01_address = self.ui.lineEdit_do_01_address.text()
-            # assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
-            # assert isinstance(int(do_01_address, 16), int), "Неправильный адрес DO 1 "
-            self.di_address = int(di_01_address, 16)
-            self.do_address = int(do_01_address, 16)
-        # except AssertionError:
-        #     msg = "Некорректные параметры DI и DO"
-        #     print(msg)
-        #     show_msg(msg, 'error')
+            assert isinstance(self.max_di, int), 'Неправильный адрес DI 1'
+            assert isinstance(self.max_do, int), 'Неправильный адрес DO 1'
+        except AssertionError:
+            msg = "Некорректные параметры DI и DO."
+            show_msg(msg, 'Ошибка')
+            self.send_msg(msg)
         except Exception:
             catch_exception()
             self.client.close()
             show_msg()
-        finally:
+        else:
+            self.ui.spinBox_di_count.setValue(self.max_di)
+            self.ui.spinBox_do_count.setValue(self.max_do)
+            msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
             self.send_msg(msg)
+
+    # ОПРЕДЕЛЕНИЕ АДРЕСА DI_1 И DO_1 В ПОДКЛЮЧЕННОМ УСТРОЙСТВЕ
+    def check_dio_01_address(self):
+        di_01_address = self.ui.lineEdit_di_01_address.text()
+        do_01_address = self.ui.lineEdit_do_01_address.text()
+        try:
+            assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
+            assert isinstance(int(do_01_address, 16), int), "Неправильный адрес DO 1 "
+        except AssertionError:
+            msg = "Некорректные параметры DI и DO"
+            self.send_msg(msg)
+            show_msg(msg, 'Ошибка')
+        except Exception:
+            catch_exception()
+            self.client.close()
+            show_msg()
+        else:
+            self.di_address = int(di_01_address, 16)
+            self.do_address = int(do_01_address, 16)
 
     # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО ЧИСЛА DI И DO
     def show_dio_buttons(self):
@@ -245,19 +270,21 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ИНИЦИАЛИЗАЦИЯ ПОТОКА ОПРОСА  DI и DO
     def run_threads(self):
-        self.th_check_dio = threading.Thread(target=self.check_dio, name='th_check_dio')
-        self.th_check_dio.run_flag = True
+        self.th_polling_dio = threading.Thread(target=self.polling_dio, name='th_polling_dio')
+        self.th_polling_dio.run_flag = True
         try:
-            self.th_check_dio.start()
+            self.th_polling_dio.start()
         except Exception:
             catch_exception()
+            msg = "Ошибка запуска опроса DI и DO"
+            self.send_msg(msg)
             show_msg()
         else:
-            msg = "Запущен опрос DI и DO"
+            msg = "Запущен опрос DI и DO."
             self.send_msg(msg)
 
     # ИЗМЕНЕНИЕ ВИДА КНОПОК НАСТРОЕК ПРИ ПОДКЛЮЧЕНИИ/ОТКЛЮЧЕНИИ
-    def change_btns_style(self, value):
+    def change_buttons_style(self, value):
         self.ui.groupBox_dio_settings.setDisabled(value)
         self.ui.groupBox_connect_settings.setDisabled(value)
         self.ui.groupBox_dio_voicing.setEnabled(value)
@@ -281,24 +308,25 @@ class MyWindow(QtWidgets.QMainWindow):
     def disconnecting(self):
         self.ui.radioButton_voicing_off.setChecked(True)
         try:
-            if self.th_check_dio.is_alive():
-                self.th_check_dio.run_flag = False
-            while self.th_check_dio.is_alive():
+            if self.th_polling_dio.is_alive():
+                self.th_polling_dio.run_flag = False
+            while self.th_polling_dio.is_alive():
                 pass
         except AttributeError:
             pass
-        except Exception as e:
+        except Exception:
             catch_exception()
-            show_msg()
+            msg = "Ошибка отключения от устройства"
+            show_msg(msg, 'Ошибка')
         else:
             self.client.close()
+            msg = f"Устройство {self.ied_type} отключено!"
+            self.send_msg(msg)
             self.select_ied()
-            self.change_btns_style(False)
+            self.change_buttons_style(False)
             self.unselect_dio(self.ui.groupBox_di)
             self.unselect_dio(self.ui.groupBox_do)
             pygame.quit()
-            msg = f"Устройство {self.ied_type} отключено!"
-            self.send_msg(msg)
 
     # ОТОБРАЖЕНИЕ РАНЕЕ СКРЫТЫХ DI и DO
     def unselect_dio(self, group_dio):
@@ -309,122 +337,105 @@ class MyWindow(QtWidgets.QMainWindow):
             dio.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     # ОПРОС DI и DO
-    def check_dio(self):
-        i = 0
-        while getattr(self.th_check_dio, 'run_flag', True):
+    def polling_dio(self):
+        while getattr(self.th_polling_dio, 'run_flag', True):
             time.sleep(self.polling_time)
-            self.checking_dio(self.di_address, self.max_di, self.di_list)
-            self.checking_dio(self.do_address, self.max_do, self.do_list)
+            self.processing(self.di_address, self.max_di, self.di_list)
+            self.processing(self.do_address, self.max_do, self.do_list)
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
-    def checking_dio(self, dio_address, max_dio, dio_buttons_list):
+    def processing(self, dio_address, max_dio, dio_buttons_list):
+        dio_list = self.get_request(dio_address, max_dio)  # получить список DI или DO
+        for i in range(max_dio):  # для отображаемого кол-ва DI или DO
+            dio_button = dio_buttons_list[i]
+            dio_button.set_button_num(i + 1)  # задает № отдельного DI или DO
+            # изменение статуса DIO
+            if dio_list[i]:  # если DIO сработал
+                dio_button.set_triggered(True)
+            else:  # если DIO отключился
+                dio_button.set_triggered(False)
+            self.check_clickable(dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
+            self.check_style(dio_button)
+            self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
+            if dio_button.is_triggered():
+                dio_button.add_to_triggered_dio_list(dio_button.num)
+            elif dio_button.num in dio_button.get_triggered_list():
+                dio_button.del_from_triggered_dio_list(dio_button.num)
+            time.sleep(0.01)
+
+    # ОТПРАВКА ЗАПРОСА В УСТРОЙСТВО
+    def get_request(self, dio_address, max_dio):
         try:
-            dio_list_request = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
+            dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
         except (AttributeError, ConnectionException):
-            QTimer.singleShot(0, self.ui.pushButton_disconnect.click)
+            catch_exception()
+            QTimer.singleShot(1000, self.ui.pushButton_disconnect.click)
             sys.exit()
         except Exception:
             catch_exception()
-            show_msg()
+            msg = "Ошибка опроса DI и DO"
+            show_msg(msg, 'Ошибка')
         else:
-            try:
-                for i in range(max_dio):  # для отображаемого кол-ва DIO
-                    dio_button = dio_buttons_list[i]
-                    dio_button.set_btn_num(i + 1)  # № отдельного DIO
+            return dio_list
 
-                    # изменение статуса DIO
-                    if dio_list_request[i]:  # если DIO сработал
-                        dio_button.setTriggered(True)
-                    else:  # если DIO отключился
-                        dio_button.setTriggered(False)
-                    self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
+    # ВОЗМОЖНОСТЬ НАЖАТИЯ КНОПОК DI ИЛИ DO, ЕСЛИ ВКЛЮЧЕНО ОЗВУЧИВАНИЕ
+    def check_clickable(self, dio_button):
+        # возможность нажатия кнопок DI и(или) DO, если включено озвучивание
+        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.get_type() == 'DI') or \
+                (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
+                (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
+            dio_button.set_clickable(True)  # делает кнопку DI и(или) DO кликабельной
+        else:
+            dio_button.setChecked(False)  # сбрасывает нажатую кнопку
+            dio_button.set_clickable(False)  # делает кнопку DI и(или) DO некликабельной
 
-                    # возможность нажатия кнопок определенного типа, если включено озвучивание
-                    if (self.ui.radioButton_di_voicing.isChecked() and dio_button.TYPE == 'DI') or \
-                            (self.ui.radioButton_do_voicing.isChecked() and dio_button.TYPE == 'DO') or \
-                            (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DIO включено
-                        dio_button.setCheckable(True)  # возможность выбора DIO для озвучиванию нажатием кнопки
-                    else:
-                        dio_button.setCheckable(False)
-                        dio_button.setChecked(False)
-                        DI0_Button.BUTTONS_IS_PRESSED = False
-                    self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
-            except Exception:
-                catch_exception()
-                show_msg()
+            dio_button.reset_pressed_flag()
 
-    # ПОДГОТОВКА К ОЗВУЧИВАНИЮ DI И DO
+    def check_style(self, dio_button):
+        if dio_button.is_triggered():
+            if dio_button.isChecked():  # если нажата кнопка DIO, то при срабатывании
+                dio_button.change_style('pressed')  # цвет меняется на синий
+            else:
+                dio_button.change_style('triggered')  # цвет меняется на зеленый
+        elif self.ui.radioButton_voicing_off.isChecked():
+            dio_button.change_style('default')  # цвет меняется на исходный
+
+    # ПОДГОТОВКА К ОЗВУЧИВАНИЮ DIO
     def voice_over_preparing(self, dio_button):
-        try:
-            if dio_button.isTriggered():
-                if dio_button.num not in dio_button.TRIGGERED_LIST and not self.ui.radioButton_voicing_off.isChecked():  # если DIO не
-                    # в списке сработавших и включено озвучивание DIO
-                    if dio_button.isChecked() or dio_button.BUTTONS_IS_PRESSED == False:  # если хоть одна кнопка нажата,
-                        # то озвучивается только соответствующий DIO
-                        self.voicing_dio(dio_button)
-                dio_button.TRIGGERED_LIST.add(dio_button.num)  # DIO добавляется в список сработавших
-            else:  # если DIO отключился
-                if dio_button.num in dio_button.TRIGGERED_LIST:  # если DIO находится в списке сработавших
-                    dio_button.TRIGGERED_LIST.remove(dio_button.num)  # DIO удаляется из списка сработавших
-                    if not self.ui.radioButton_voicing_off.isChecked():  # если включено озвучивание DIO
-                        if dio_button.isChecked() or dio_button.BUTTONS_IS_PRESSED == False:  # если хоть одна кнопка нажата,
-                            # то озвучивается только соответствующий DIO
-                            self.voicing_dio(dio_button)
-                time.sleep(0.005)
-        except Exception:
-            catch_exception()
-            show_msg()
-
-    # enabled_dio_list = None
-    # dio_type = None
-    # if isinstance(dio_button, DI_Button):
-    #     dio_type = 'DI'
-    #     enabled_dio_list = self.enabled_di_list
-    # elif isinstance(dio_button, DO_Button):
-    #     dio_type = 'DO'
-    #     enabled_dio_list = self.enabled_do_list
-
-    # if dio_button.isChecked() or not dio_button.BUTTONS_IS_PRESSED:  # если кнопка нажата или нажатых кнопок нет,
-    #     # то озвучивается либо выбранный DIO, либо все
-    #     if dio_button.isTriggered():  # если DIO сработал
-    #         if dio_button.num not in dio_button.TRIGGERED_LIST and not self.ui.radioButton_voicing_off.isChecked():  # если DIO не находится в списке сработавших
-    #             self.voicing_dio(dio_button)
-    #     # else:  # если DIO находитсяв списке сработавших
-    #     #     if not dio_button.isTriggered():  # если DIO отключился
-    #     #         dio_button.TRIGGERED_LIST.remove(dio_button.num)  # DIO удаляется из списка
-    #     #         self.voicing_dio(dio_button)
-    #     dio_button.TRIGGERED_LIST.add(dio_button.num)  # DIO добавляется в список сработавших
-    #     time.sleep(0.005)
-    #     # time.sleep(1)
-    # print(dio_button.TRIGGERED_LIST)
+        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.get_type() == 'DI') or \
+                (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
+                self.ui.radioButton_dio_voicing.isChecked():
+            if dio_button.isChecked() or not dio_button.get_pressed_flag():
+                if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
+                        (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
+                    self.voicing(dio_button)
 
     # ОЗВУЧИВАНИЕ DI И DO
-    def voicing_dio(self, dio_button):
-        print('voicing_dio')
-        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.TYPE == 'DI') or \
-                (self.ui.radioButton_do_voicing.isChecked() and dio_button.TYPE == 'DO') or \
-                self.ui.radioButton_dio_voicing.isChecked():
-            try:
-                song_dio_type = pygame.mixer.Sound(
-                    resource_path(f'static/voicing/{self.voice_type}/{dio_button.TYPE}/{dio_button.num}.wav'))
-                song_time = song_dio_type.get_length() - 0.275
-                song_dio_type.play()
+    def voicing(self, dio_button):
+        try:
+            song_dio_type = pygame.mixer.Sound(
+                resource_path(f'static/voicing/{self.voice_type}/{dio_button.get_type()}/{dio_button.num}.wav'))
+            song_time = song_dio_type.get_length() - 0.3
+            song_dio_type.play()
+            time.sleep(song_time)
+            if not dio_button.is_triggered():
+                song_dio_state = pygame.mixer.Sound(
+                    resource_path(f'static/voicing/{self.voice_type}/on-off/отключено.wav'))
+                song_time = song_dio_state.get_length() - 0.1
+                song_dio_state.play()
                 time.sleep(song_time)
-                if not dio_button.isTriggered():
-                    song_dio_state = pygame.mixer.Sound(
-                        resource_path(f'static/voicing/{self.voice_type}/on-off/отключено.wav'))
-                    song_time = song_dio_state.get_length() - 0.1
-                    song_dio_state.play()
-                    time.sleep(song_time)
-            except Exception:
-                catch_exception()
-                show_msg()
+        except Exception:
+            catch_exception()
+            msg = "Ошибка озвучивания DI и DO"
+            show_msg(msg, 'Ошибка')
 
     # ЗАВЕРШЕНИЕ РАБОТЫ ПРОГРАММЫ
     def closeEvent(self, event):
+        print('Закрытие программы')
         self.disconnecting()
         event.accept()
 
+    # ВЫВОД СООБЩЕНИЯ В КОНСОЛЬ И СТАТУС-БАР
     def send_msg(self, msg):
         self.statusBar().showMessage(msg)
         print(msg)
