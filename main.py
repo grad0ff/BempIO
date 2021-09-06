@@ -1,4 +1,4 @@
-# pyuic5 BempIO.ui -o BempIO.py
+# pyuic5 BempIO_v2.ui -o BempIO_v2.py
 
 import functools
 import logging
@@ -9,7 +9,7 @@ import time
 import pygame
 import serial.tools.list_ports
 
-from BempIO import Ui_MainWindow
+from BempIO_v2 import Ui_MainWindow
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize, QTimer
 from PyQt5.QtGui import QIcon, QFont
@@ -79,17 +79,21 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.setWindowTitle('BempIO')
         self.setWindowIcon(QIcon(resource_path('static/images/BempIO.ico')))
-        self.setFixedSize(760, 960)
+        self.setFixedSize(760, 760)
         self.searh_port = self.ui.pushButton_searh_ports
         self.searh_port.setIcon(QIcon(resource_path('static/images/find.svg')))
         self.searh_port.setIconSize(QSize(15, 15))
+
         self.msg = QMessageBox()
 
         # инициализация параметров DI и DO устройства
-        self.ui.comboBox_ied_type.addItems(['БЭМП [РУ]'])
+        self.ui.tabWidget.setTabText(1, 'Параметры устройства')
+
+        self.ui.comboBox_ied_type.addItems(['БЭМП'])
         self.select_ied()
 
         # инициализация параметров подключения
+        self.ui.tabWidget.setTabText(0, 'Параметры подключения')
         self.find_ports()
         self.ui.comboBox_speed.addItems(['2400', '4800', '9600', '19200', '38400', '56000', '57600', '115200'])
         self.ui.comboBox_speed.setCurrentIndex(4)
@@ -97,7 +101,8 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_stopbits.addItems(['1', '2'])
         self.ui.spinBox_ied_address.setMinimum(1)
         self.ui.spinBox_ied_address.setMaximum(247)
-        self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
+        self.ui.pushButton_connect.setStyleSheet('background: rgb(255,85,70)')
+
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
         self.polling_time = 0.5
@@ -105,21 +110,23 @@ class MyWindow(QtWidgets.QMainWindow):
         self.max_do = 1
         self.unit = 0x01
 
+        self.ui.tabWidget.setTabText(2, 'Дополнителльные функции')
+
         # обработка событий
         self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)
-        self.ui.pushButton_connect.clicked.connect(self.connecting)
-        self.ui.pushButton_disconnect.clicked.connect(self.disconnecting)
+        self.ui.pushButton_connect.clicked.connect(self.check_connect)
         self.ui.comboBox_ied_type.activated.connect(self.select_ied)
+        self.ui.pushButton_do_control.clicked.connect(self.control_do)
 
         # тип голоса при запуске
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
         # тест фичи
-
+        self.ui.pushButton_do_control.clicked.connect(self._testing)
     # ТЕСТИРОВАНИЕ ФИЧЕЙ
     def _testing(self):
         try:
-            pass
+            print(DI_Button._PRESSED_FLAG)
         except Exception:
             catch_exception()
 
@@ -132,7 +139,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.lineEdit_do_01_address.setDisabled(True)
         self.ui.spinBox_di_count.setDisabled(True)
         self.ui.spinBox_do_count.setDisabled(True)
-        if self.ied_type == 'БЭМП [РУ]':
+        if self.ied_type == 'БЭМП':
             self.ui.lineEdit_di_01_address.setText('0x0500')
             self.ui.lineEdit_do_01_address.setText('0x0700')
         elif self.ied_type == 'Прочее':
@@ -168,6 +175,12 @@ class MyWindow(QtWidgets.QMainWindow):
             self.send_msg(msg)
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
+    def check_connect(self):
+        if self.ui.pushButton_connect.text() == "ПОДКЛЮЧИТЬ":
+            self.connecting()
+        else:
+            self.disconnecting()
+
     def connecting(self):
         msg = "Проверка связи с устройством..."
         self.send_msg(msg)
@@ -197,15 +210,18 @@ class MyWindow(QtWidgets.QMainWindow):
                 catch_exception()
                 show_msg()
             else:
-                msg = f"Связь c {self.ied_type} установлена!"
-                self.send_msg(msg)
-                self.check_ied_params()  # проверка параметров устройства
-                self.show_dio_buttons()  # отображение актуального числа di и do
-                self.change_buttons_style(True)  # активация/деактивация кнопок управления
-                self.run_threads()
-                pygame.init()  # инициализация медиапроигрывателя
-                msg = f"Устройство {self.ied_type} подключено!"
-                self.send_msg(msg)
+                try:
+                    msg = f"Связь c {self.ied_type} установлена!"
+                    self.send_msg(msg)
+                    self.check_ied_params()  # проверка параметров устройства
+                    self.show_dio_buttons()  # отображение актуального числа di и do
+                    self.change_buttons_style(True)  # активация/деактивация кнопок управления
+                    self.run_threads()
+                    pygame.init()  # инициализация медиапроигрывателя
+                    msg = f"Устройство {self.ied_type} подключено!"
+                    self.send_msg(msg)
+                except:
+                    catch_exception()
 
     # ПРОВЕРКА ПАРАМЕТРОВ ПОДКЛЮЧЕННОГО УСТРОЙСТВА
     def check_ied_params(self):
@@ -217,7 +233,7 @@ class MyWindow(QtWidgets.QMainWindow):
     # ОПРЕДЕЛЕНИЕ КОЛИЧЕСТВА DI И DO В ПОДКЛЮЧЕННОМ УСТРОЙСТВЕ
     def check_max_dio(self):
         try:
-            if self.ied_type == 'БЭМП [РУ]':
+            if self.ied_type == 'БЭМП':
                 try:
                     self.max_di = self.client.read_holding_registers(0x0100, 1, unit=self.unit).registers[0]
                     self.max_do = self.client.read_holding_registers(0x0101, 1, unit=self.unit).registers[0]
@@ -260,8 +276,10 @@ class MyWindow(QtWidgets.QMainWindow):
             self.client.close()
             show_msg()
         else:
-            self.di_address = int(di_01_address, 16)
-            self.do_address = int(do_01_address, 16)
+            msg = f"Адрес DI 1 - {di_01_address}\nАдрес DO 1 - {do_01_address}"
+            self.send_msg(msg)
+            self.di_start_address = int(di_01_address, 16)
+            self.do_start_address = int(do_01_address, 16)
 
     # ОТОБРАЖЕНИЕ АКТУАЛЬНОГО ЧИСЛА DI И DO
     def show_dio_buttons(self):
@@ -284,28 +302,21 @@ class MyWindow(QtWidgets.QMainWindow):
             self.send_msg(msg)
 
     # ИЗМЕНЕНИЕ ВИДА КНОПОК НАСТРОЕК ПРИ ПОДКЛЮЧЕНИИ/ОТКЛЮЧЕНИИ
-    def change_buttons_style(self, value):
-        self.ui.groupBox_dio_settings.setDisabled(value)
-        self.ui.groupBox_connect_settings.setDisabled(value)
-        self.ui.groupBox_dio_voicing.setEnabled(value)
-        self.ui.pushButton_connect.setDisabled(value)
-        self.ui.pushButton_disconnect.setEnabled(value)
-        self.ui.groupBox_di.setEnabled(value)
-        self.ui.groupBox_do.setEnabled(value)
-        # self.ui.groupBox_voice_type.setEnabled(value)
-        if value:
-            self.ui.pushButton_connect.setStyleSheet('background: rgb(100,250,50)')
-            self.ui.pushButton_connect.setText('Подключено')
-            self.ui.pushButton_disconnect.setStyleSheet('background: #f0f0f0')
-            self.ui.pushButton_disconnect.setText('Отключить')
-        else:
-            self.ui.pushButton_connect.setStyleSheet('background: #f0f0f0')
-            self.ui.pushButton_connect.setText('Подключить')
-            self.ui.pushButton_disconnect.setStyleSheet('background: rgb(255,85,70)')
-            self.ui.pushButton_disconnect.setText('Отключено')
+    def change_buttons_style(self, a0: bool):
+        self.ui.tab2_dio_settings.setDisabled(a0)
+        self.ui.tab1_connect_settings.setDisabled(a0)
+        self.ui.groupBox_voicing_settings.setEnabled(a0)
+        self.ui.groupBox_do_control.setEnabled(a0)
+        self.ui.groupBox_di.setEnabled(a0)
+        self.ui.groupBox_do.setEnabled(a0)
+        self.ui.pushButton_connect.change_style(a0)
+        self.ui.pushButton_do_control.setEnabled(a0)
+        self.ui.comboBox_voice_type.setEnabled(False)
 
     # ОТКЛЮЧЕНИЕ ОТ УСТРОЙСТВА
     def disconnecting(self):
+        msg = "Отключение от устройства..."
+        self.send_msg(msg)
         self.ui.radioButton_voicing_off.setChecked(True)
         try:
             if self.th_polling_dio.is_alive():
@@ -340,36 +351,39 @@ class MyWindow(QtWidgets.QMainWindow):
     def polling_dio(self):
         while getattr(self.th_polling_dio, 'run_flag', True):
             time.sleep(self.polling_time)
-            self.processing(self.di_address, self.max_di, self.di_list)
-            self.processing(self.do_address, self.max_do, self.do_list)
+            self.processing(self.di_start_address, self.max_di, self.di_list)
+            self.processing(self.do_start_address, self.max_do, self.do_list)
 
     # ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОПРОСА DI и DO
     def processing(self, dio_address, max_dio, dio_buttons_list):
         dio_list = self.get_request(dio_address, max_dio)  # получить список DI или DO
-        for i in range(max_dio):  # для отображаемого кол-ва DI или DO
-            dio_button = dio_buttons_list[i]
-            dio_button.set_button_num(i + 1)  # задает № отдельного DI или DO
-            # изменение статуса DIO
-            if dio_list[i]:  # если DIO сработал
-                dio_button.set_triggered(True)
-            else:  # если DIO отключился
-                dio_button.set_triggered(False)
-            self.check_clickable(dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
-            self.check_style(dio_button)
-            self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
-            if dio_button.is_triggered():
-                dio_button.add_to_triggered_dio_list(dio_button.num)
-            elif dio_button.num in dio_button.get_triggered_list():
-                dio_button.del_from_triggered_dio_list(dio_button.num)
-            time.sleep(0.01)
+        try:
+            for i in range(max_dio):  # для отображаемого кол-ва DI или DO
+                dio_button = dio_buttons_list[i]
+                dio_button.set_button_num(i + 1)  # задает № отдельного DI или DO
+                # изменение статуса DIO
+                if dio_list[i]:  # если DIO сработал
+                    dio_button.set_triggered(True)
+                else:  # если DIO отключился
+                    dio_button.set_triggered(False)
+                self.check_clickable(
+                    dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
+                self.check_style(dio_button)
+                self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
+                if dio_button.is_triggered():
+                    dio_button.add_to_triggered_dio_list(dio_button.num)
+                elif dio_button.num in dio_button.get_triggered_list():
+                    dio_button.del_from_triggered_dio_list(dio_button.num)
+                time.sleep(0.01)
+        except Exception:
+            catch_exception()
 
     # ОТПРАВКА ЗАПРОСА В УСТРОЙСТВО
     def get_request(self, dio_address, max_dio):
         try:
             dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
         except (AttributeError, ConnectionException):
-            catch_exception()
-            QTimer.singleShot(1000, self.ui.pushButton_disconnect.click)
+            # QTimer.singleShot(0, self.ui.pushButton_connect.click)
             sys.exit()
         except Exception:
             catch_exception()
@@ -388,7 +402,6 @@ class MyWindow(QtWidgets.QMainWindow):
         else:
             dio_button.setChecked(False)  # сбрасывает нажатую кнопку
             dio_button.set_clickable(False)  # делает кнопку DI и(или) DO некликабельной
-
             dio_button.reset_pressed_flag()
 
     def check_style(self, dio_button):
@@ -406,6 +419,7 @@ class MyWindow(QtWidgets.QMainWindow):
                 (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
                 self.ui.radioButton_dio_voicing.isChecked():
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
+                print(dio_button.num)
                 if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
                         (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
                     self.voicing(dio_button)
@@ -428,6 +442,9 @@ class MyWindow(QtWidgets.QMainWindow):
             catch_exception()
             msg = "Ошибка озвучивания DI и DO"
             show_msg(msg, 'Ошибка')
+
+    def control_do(self):
+        pass
 
     # ЗАВЕРШЕНИЕ РАБОТЫ ПРОГРАММЫ
     def closeEvent(self, event):
