@@ -1,4 +1,5 @@
 # pyuic5 BempIO_v2.ui -o BempIO_v2.py
+# -*- coding: utf-8 -*-
 
 import functools
 import logging
@@ -105,7 +106,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.5
+        self.polling_time = 0.1
         self.max_di = 1
         self.max_do = 1
         self.unit = 0x01
@@ -123,10 +124,11 @@ class MyWindow(QtWidgets.QMainWindow):
 
         # тест фичи
         self.ui.pushButton_do_control.clicked.connect(self._testing)
+
     # ТЕСТИРОВАНИЕ ФИЧЕЙ
     def _testing(self):
         try:
-            print(DI_Button._PRESSED_FLAG)
+            print(DIButton._PRESSED_FLAG)
         except Exception:
             catch_exception()
 
@@ -176,7 +178,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def check_connect(self):
-        if self.ui.pushButton_connect.text() == "ПОДКЛЮЧИТЬ":
+        if self.ui.pushButton_connect.text() == "ПОДКЛЮЧИТЬ" or self.ui.pushButton_connect.isChecked():
             self.connecting()
         else:
             self.disconnecting()
@@ -399,6 +401,7 @@ class MyWindow(QtWidgets.QMainWindow):
                 (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
                 (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
             dio_button.set_clickable(True)  # делает кнопку DI и(или) DO кликабельной
+            dio_button.set_voicing_flag()
         else:
             dio_button.setChecked(False)  # сбрасывает нажатую кнопку
             dio_button.set_clickable(False)  # делает кнопку DI и(или) DO некликабельной
@@ -410,19 +413,17 @@ class MyWindow(QtWidgets.QMainWindow):
                 dio_button.change_style('pressed')  # цвет меняется на синий
             else:
                 dio_button.change_style('triggered')  # цвет меняется на зеленый
-        elif self.ui.radioButton_voicing_off.isChecked():
-            dio_button.change_style('default')  # цвет меняется на исходный
+        else:
+            if self.ui.radioButton_voicing_off.isChecked():
+                dio_button.change_style('default')  # цвет меняется на исходный
 
     # ПОДГОТОВКА К ОЗВУЧИВАНИЮ DIO
     def voice_over_preparing(self, dio_button):
-        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.get_type() == 'DI') or \
-                (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
-                self.ui.radioButton_dio_voicing.isChecked():
+        if dio_button.is_clickable():
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
-                print(dio_button.num)
                 if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
                         (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
-                    self.voicing(dio_button)
+                    print(dio_button.get_type(), dio_button.num)
 
     # ОЗВУЧИВАНИЕ DI И DO
     def voicing(self, dio_button):
@@ -448,9 +449,10 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ЗАВЕРШЕНИЕ РАБОТЫ ПРОГРАММЫ
     def closeEvent(self, event):
-        print('Закрытие программы')
         self.disconnecting()
         event.accept()
+        msg = 'Закрытие программы'
+        self.send_msg(msg)
 
     # ВЫВОД СООБЩЕНИЯ В КОНСОЛЬ И СТАТУС-БАР
     def send_msg(self, msg):

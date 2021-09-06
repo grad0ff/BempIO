@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtGui import QFont
 
 
-class My_Button(QPushButton):
+class MyButton(QPushButton):
     def __init__(self, *args):
         super().__init__(*args)
         self.setCheckable(True)
@@ -15,10 +15,7 @@ class My_Button(QPushButton):
             self.setChecked(False)
 
 
-class Connect_Button(My_Button):
-
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
+class ConnectButton(MyButton):
 
     def change_style(self, a0: bool):
         if a0:
@@ -29,18 +26,22 @@ class Connect_Button(My_Button):
             self.setStyleSheet('background: rgb(255,85,70)')
 
 
-class DI0_Button(My_Button):
+class DI0Button(MyButton):
     def __init__(self, *args):
         super().__init__(*args)
         self.setCheckable(False)
         self._is_triggered = False
+        self.voicing_flag = False
 
     # НАЖАТИЕ НА КНОПКУ DI ИЛИ DO
     def mousePressEvent(self, event):
-        super().mousePressEvent(event)
         if self.is_clickable():
-            super().mousePressEvent(event)
-            self.__class__._PRESSED_FLAG = True
+            # super().mousePressEvent(event)
+            if not self.isChecked():
+                self.setChecked(True)
+                self.set_pressed_flag()
+            else:
+                self.reset_pressed_flag()
 
     # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
     def set_clickable(self, a0: bool):
@@ -83,23 +84,29 @@ class DI0_Button(My_Button):
         return self._TYPE
 
     def get_pressed_flag(self):
-        return self.__class__._PRESSED_FLAG
+        return self._PRESSED_FLAG
 
     def set_pressed_flag(self):
-        self.__class__._PRESSED_FLAG = False
+        self._PRESSED_FLAG = True
 
     def reset_pressed_flag(self):
-        self.__class__._PRESSED_FLAG = False
+        self._PRESSED_FLAG = False
+
+    def set_voicing_flag(self):
+        self.voicing_flag = True
+
+    def get_voicing_flag(self):
+        return self.voicing_flag
 
 
-class DI_Button(DI0_Button):
+class DIButton(DI0Button):
     _TYPE = 'DI'
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
     _TRIGGERED_LIST = set()
 
 
-class DO_Button(DI0_Button):
+class DOButton(DI0Button):
     _TYPE = 'DO'
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
