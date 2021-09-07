@@ -9,16 +9,13 @@ class MyButton(QPushButton):
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        if not self.isChecked():
-            self.setChecked(True)
-        else:
-            self.setChecked(False)
+
 
 
 class ConnectButton(MyButton):
 
-    def change_style(self, a0: bool):
-        if a0:
+    def change_style(self, val: bool):
+        if val:
             self.setStyleSheet('background: rgb(50,255,50)')
             self.setText('ОТКЛЮЧИТЬ')
         else:
@@ -39,23 +36,24 @@ class DI0Button(MyButton):
             # super().mousePressEvent(event)
             if not self.isChecked():
                 self.setChecked(True)
-                self.set_pressed_flag()
+                self.set_pressed_flag(True)
             else:
-                self.reset_pressed_flag()
+                self.setChecked(False)
+                self.set_pressed_flag(False)
 
     # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
-    def set_clickable(self, a0: bool):
-        self.setCheckable(a0)
-        self._CLICKABLE_FLAG = a0
+    def set_clickable(self, val: bool):
+        self.setCheckable(val)
+        self.__class__._CLICKABLE_FLAG = val
 
     def is_clickable(self):
-        return self._CLICKABLE_FLAG
+        return self.__class__._CLICKABLE_FLAG
 
     def set_button_num(self, num):
         self.num = num
 
-    def set_triggered(self, a0: bool):
-        self._is_triggered = a0
+    def set_triggered(self, val: bool):
+        self._is_triggered = val
 
     def is_triggered(self):
         return self._is_triggered
@@ -83,17 +81,16 @@ class DI0Button(MyButton):
     def get_pressed_flag(self):
         return self.__class__._PRESSED_FLAG
 
-    def set_pressed_flag(self):
-        self.__class__._PRESSED_FLAG = True
-
-    def reset_pressed_flag(self):
-        self.__class__._PRESSED_FLAG = False
-
-    def set_voicing_flag(self):
-        self.voicing_flag = True
+    def set_pressed_flag(self, val: bool):
+        self.__class__._PRESSED_FLAG = val
 
     def get_voicing_flag(self):
         return self.voicing_flag
+
+    def set_voicing_flag(self, val: bool):
+        self.voicing_flag = val
+
+
 
 
 class DIButton(DI0Button):

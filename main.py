@@ -401,11 +401,12 @@ class MyWindow(QtWidgets.QMainWindow):
                 (self.ui.radioButton_do_voicing.isChecked() and dio_button.type == 'DO') or \
                 (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
             dio_button.set_clickable(True)  # делает кнопку DI и(или) DO кликабельной
-            dio_button.set_voicing_flag()
+            dio_button.set_voicing_flag(True)
         else:
             dio_button.setChecked(False)  # сбрасывает нажатую кнопку
             dio_button.set_clickable(False)  # делает кнопку DI и(или) DO некликабельной
-            dio_button.reset_pressed_flag()
+            dio_button.set_pressed_flag(False)
+            dio_button.set_voicing_flag(False)
 
     def check_style(self, dio_button):
         if dio_button.is_triggered():
@@ -422,7 +423,6 @@ class MyWindow(QtWidgets.QMainWindow):
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
                 if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
                         (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
-                    print(dio_button.type, dio_button.num)
                     self.voicing(dio_button)
 
     # ОЗВУЧИВАНИЕ DI И DO
