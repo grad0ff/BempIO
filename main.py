@@ -397,8 +397,8 @@ class MyWindow(QtWidgets.QMainWindow):
     # ВОЗМОЖНОСТЬ НАЖАТИЯ КНОПОК DI ИЛИ DO, ЕСЛИ ВКЛЮЧЕНО ОЗВУЧИВАНИЕ
     def check_clickable(self, dio_button):
         # возможность нажатия кнопок DI и(или) DO, если включено озвучивание
-        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.get_type() == 'DI') or \
-                (self.ui.radioButton_do_voicing.isChecked() and dio_button.get_type() == 'DO') or \
+        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.type == 'DI') or \
+                (self.ui.radioButton_do_voicing.isChecked() and dio_button.type == 'DO') or \
                 (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
             dio_button.set_clickable(True)  # делает кнопку DI и(или) DO кликабельной
             dio_button.set_voicing_flag()
@@ -414,8 +414,7 @@ class MyWindow(QtWidgets.QMainWindow):
             else:
                 dio_button.change_style('triggered')  # цвет меняется на зеленый
         else:
-            if self.ui.radioButton_voicing_off.isChecked():
-                dio_button.change_style('default')  # цвет меняется на исходный
+            dio_button.change_style('default')  # цвет меняется на исходный
 
     # ПОДГОТОВКА К ОЗВУЧИВАНИЮ DIO
     def voice_over_preparing(self, dio_button):
@@ -423,13 +422,14 @@ class MyWindow(QtWidgets.QMainWindow):
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
                 if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
                         (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
-                    print(dio_button.get_type(), dio_button.num)
+                    print(dio_button.type, dio_button.num)
+                    self.voicing(dio_button)
 
     # ОЗВУЧИВАНИЕ DI И DO
     def voicing(self, dio_button):
         try:
             song_dio_type = pygame.mixer.Sound(
-                resource_path(f'static/voicing/{self.voice_type}/{dio_button.get_type()}/{dio_button.num}.wav'))
+                resource_path(f'static/voicing/{self.voice_type}/{dio_button.type}/{dio_button.num}.wav'))
             song_time = song_dio_type.get_length() - 0.3
             song_dio_type.play()
             time.sleep(song_time)

@@ -72,25 +72,22 @@ class DI0Button(MyButton):
             self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Bold))
 
     def get_triggered_list(self):
-        return self._TRIGGERED_LIST
+        return self.__class__._TRIGGERED_LIST
 
     def add_to_triggered_dio_list(self, element):
-        self._TRIGGERED_LIST.add(element)
+        self.__class__._TRIGGERED_LIST.add(element)
 
     def del_from_triggered_dio_list(self, element):
-        self._TRIGGERED_LIST.remove(element)
-
-    def get_type(self):
-        return self._TYPE
+        self.__class__._TRIGGERED_LIST.remove(element)
 
     def get_pressed_flag(self):
-        return self._PRESSED_FLAG
+        return self.__class__._PRESSED_FLAG
 
     def set_pressed_flag(self):
-        self._PRESSED_FLAG = True
+        self.__class__._PRESSED_FLAG = True
 
     def reset_pressed_flag(self):
-        self._PRESSED_FLAG = False
+        self.__class__._PRESSED_FLAG = False
 
     def set_voicing_flag(self):
         self.voicing_flag = True
@@ -100,14 +97,20 @@ class DI0Button(MyButton):
 
 
 class DIButton(DI0Button):
-    _TYPE = 'DI'
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
     _TRIGGERED_LIST = set()
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.type = 'DI'
 
 
 class DOButton(DI0Button):
-    _TYPE = 'DO'
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
     _TRIGGERED_LIST = set()
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.type = 'DO'
