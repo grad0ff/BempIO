@@ -126,7 +126,13 @@ class MyWindow(QtWidgets.QMainWindow):
         self.voice_type = self.ui.comboBox_voice_type.currentText()
 
         # тест фичи
-        self.ui.pushButton_do_control.clicked.connect(self._testing)
+        self.ui.pushButton_do_control.clicked.connect(self.do_control)
+
+    def do_control(self):
+        if self.ui.pushButton_do_control.text() == '':
+            DOButton.DO_CONTROL = True
+        else:
+            DOButton.DO_CONTROL = True
 
     # ТЕСТИРОВАНИЕ ФИЧЕЙ
     def _testing(self):
@@ -400,21 +406,25 @@ class MyWindow(QtWidgets.QMainWindow):
     # ВОЗМОЖНОСТЬ НАЖАТИЯ КНОПОК DI ИЛИ DO, ЕСЛИ ВКЛЮЧЕНО ОЗВУЧИВАНИЕ
     def check_clickable(self, dio_button):
         # возможность нажатия кнопок DI и(или) DO, если включено озвучивание
-        if (self.ui.radioButton_di_voicing.isChecked() and dio_button.type == 'DI') or \
-                (self.ui.radioButton_do_voicing.isChecked() and dio_button.type == 'DO') or \
-                (self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
-            dio_button.set_clickable(True)  # делает кнопку DI и(или) DO кликабельной
-            dio_button.set_voicing_flag(True)
+        if (isinstance(dio_button, DIButton) and self.ui.radioButton_di_voicing.isChecked()) or \
+                (isinstance(dio_button, DOButton) and (self.ui.radioButton_do_voicing.isChecked() or
+                                                       DOButton.DO_CONTROL)) or (
+        self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
+            dio_button.setCheckable(True)  # делает кнопку DI и(или) DO кликабельной
+        # dio_button.set_voicing_flag(True)
         else:
             dio_button.setChecked(False)  # сбрасывает нажатую кнопку
-            dio_button.set_clickable(False)  # делает кнопку DI и(или) DO некликабельной
-            dio_button.set_pressed_flag(False)
-            dio_button.set_voicing_flag(False)
+        dio_button.setCheckable(False)  # делает кнопку DI и(или) DO некликабельной
+        dio_button.set_pressed_flag(False)
+        # dio_button.set_voicing_flag(False)
 
     def check_style(self, dio_button):
         if dio_button.is_triggered():
             if dio_button.isChecked():  # если нажата кнопка DIO, то при срабатывании
-                dio_button.change_style('pressed')  # цвет меняется на синий
+                if isinstance(dio_button, DOButton) and DOButton.DO_CONTROL:
+                    dio_button.change_style('controlled')
+                else:
+                    dio_button.change_style('pressed')  # цвет меняется на синий
             else:
                 dio_button.change_style('triggered')  # цвет меняется на зеленый
         else:

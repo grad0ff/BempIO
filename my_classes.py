@@ -7,9 +7,22 @@ class MyButton(QPushButton):
         super().__init__(*args)
         self.setCheckable(True)
 
+    # НАЖАТИЕ НА КНОПКУ
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
+        if not self.isChecked():
+            self.setChecked(True)
+        else:
+            self.setChecked(False)
 
+
+class DOControl(QPushButton):
+
+    def set_do_control(self, val: bool):
+        DOButton.DO_CONTROL = val
+
+    def is_do_control(self):
+        return DOButton.DO_CONTROL
 
 
 class ConnectButton(MyButton):
@@ -39,11 +52,10 @@ class DI0Button(MyButton):
                 self.set_pressed_flag(True)
             else:
                 self.setChecked(False)
-                self.set_pressed_flag(False)
 
     # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
-    def set_clickable(self, val: bool):
-        self.setCheckable(val)
+    def setCheckable(self, val: bool):
+        super().setCheckable(val)
         self.__class__._CLICKABLE_FLAG = val
 
     def is_clickable(self):
@@ -67,7 +79,7 @@ class DI0Button(MyButton):
                 self.setStyleSheet('background: rgb(50,255,50)')
             elif state == 'pressed':
                 self.setStyleSheet('background: rgb(150,200,250)')
-            self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Bold))
+            self.setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
 
     def get_triggered_list(self):
         return self.__class__._TRIGGERED_LIST
@@ -91,8 +103,6 @@ class DI0Button(MyButton):
         self.voicing_flag = val
 
 
-
-
 class DIButton(DI0Button):
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
@@ -107,7 +117,13 @@ class DOButton(DI0Button):
     _PRESSED_FLAG = False
     _CLICKABLE_FLAG = False
     _TRIGGERED_LIST = set()
+    DO_CONTROL = False
 
     def __init__(self, *args):
         super().__init__(*args)
         self.type = 'DO'
+
+    def change_style(self, state):
+        super().change_style(state)
+        if state == 'controlled':
+            self.setStyleSheet('background: rgb(255,85,70)')
