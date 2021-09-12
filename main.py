@@ -1,6 +1,7 @@
 # pyuic5 BempIO_v2.ui -o BempIO_v2.py
-# -*- coding: utf-8 -*-
+"-*- coding: utf-8 -*-"""
 
+import locale
 import functools
 import logging
 import os
@@ -18,6 +19,8 @@ from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
 from my_classes import *
+
+locale.setlocale(locale.LC_ALL, 'ru-RU')
 
 
 #  ДЕКОРАТОР ПРОВЕРКИ ВРЕМЕНИ ВЫПОЛНЕНИЯ ФУНКЦИИ
@@ -106,7 +109,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.ui.pushButton_connect.setFocus()
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
-        self.polling_time = 0.1
+        self.polling_time = 0
         self.max_di = 1
         self.max_do = 1
         self.unit = 0x01
@@ -177,7 +180,7 @@ class MyWindow(QtWidgets.QMainWindow):
             self.send_msg(msg)
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
-    def check_connect(self):
+    def check_connect(self, *args):
         if self.ui.pushButton_connect.text() == "ПОДКЛЮЧИТЬ" or self.ui.pushButton_connect.isChecked():
             self.connecting()
         else:
@@ -449,7 +452,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # ЗАВЕРШЕНИЕ РАБОТЫ ПРОГРАММЫ
     def closeEvent(self, event):
-        self.disconnecting()
+        QTimer.singleShot(0, self.disconnecting)
         event.accept()
         msg = 'Закрытие программы'
         self.send_msg(msg)
