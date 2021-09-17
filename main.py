@@ -414,8 +414,8 @@ class MyWindow(QtWidgets.QMainWindow):
         # dio_button.set_voicing_flag(True)
         else:
             dio_button.setChecked(False)  # сбрасывает нажатую кнопку
-        dio_button.setCheckable(False)  # делает кнопку DI и(или) DO некликабельной
-        dio_button.set_pressed_flag(False)
+            dio_button.setCheckable(False)  # делает кнопку DI и(или) DO некликабельной
+            dio_button.set_pressed_flag(False)
         # dio_button.set_voicing_flag(False)
 
     def check_style(self, dio_button):
