@@ -52,7 +52,7 @@ class DI0Button(MyButton):
                 self.set_pressed_flag(True)
             else:
                 self.setChecked(False)
-
+            print(DOButton.DO_CONTROL)
     # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
     def setCheckable(self, val: bool):
         super().setCheckable(val)

@@ -9,12 +9,12 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from my_classes import ConnectButton, DIButton, DOButton
+from my_classes import DIButton, DOButton, ConnectButton, DOControl
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(760, 760)
+        MainWindow.resize(760, 730)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -24,10 +24,10 @@ class Ui_MainWindow(object):
         self.mainwidget.setObjectName("mainwidget")
         self.groupBox_di = QtWidgets.QGroupBox(self.mainwidget)
         self.groupBox_di.setEnabled(False)
-        self.groupBox_di.setGeometry(QtCore.QRect(10, 140, 351, 591))
+        self.groupBox_di.setGeometry(QtCore.QRect(10, 140, 351, 561))
         self.groupBox_di.setObjectName("groupBox_di")
         self.gridLayoutWidget = QtWidgets.QWidget(self.groupBox_di)
-        self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 30, 331, 555))
+        self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 20, 331, 531))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
         self.gridLayout_1 = QtWidgets.QGridLayout(self.gridLayoutWidget)
         self.gridLayout_1.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
@@ -611,10 +611,10 @@ class Ui_MainWindow(object):
         self.gridLayout_1.addWidget(self.pushButton_DI_91, 10, 5, 1, 1)
         self.groupBox_do = QtWidgets.QGroupBox(self.mainwidget)
         self.groupBox_do.setEnabled(False)
-        self.groupBox_do.setGeometry(QtCore.QRect(400, 140, 351, 591))
+        self.groupBox_do.setGeometry(QtCore.QRect(400, 140, 351, 561))
         self.groupBox_do.setObjectName("groupBox_do")
         self.gridLayoutWidget_2 = QtWidgets.QWidget(self.groupBox_do)
-        self.gridLayoutWidget_2.setGeometry(QtCore.QRect(10, 30, 331, 555))
+        self.gridLayoutWidget_2.setGeometry(QtCore.QRect(10, 20, 331, 531))
         self.gridLayoutWidget_2.setObjectName("gridLayoutWidget_2")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.gridLayoutWidget_2)
         self.gridLayout_2.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
@@ -1390,7 +1390,7 @@ class Ui_MainWindow(object):
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.pushButton_do_control = QtWidgets.QPushButton(self.verticalLayoutWidget)
+        self.pushButton_do_control = DOControl(self.verticalLayoutWidget)
         self.pushButton_do_control.setObjectName("pushButton_do_control")
         self.verticalLayout.addWidget(self.pushButton_do_control)
         self.horizontalLayout_12.addWidget(self.groupBox_do_control)
@@ -1405,7 +1405,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusBar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
