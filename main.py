@@ -83,7 +83,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.setWindowTitle('BempIO')
         self.setWindowIcon(QIcon(resource_path('static/images/BempIO.ico')))
-        self.setFixedSize(760, 760)
+        self.setFixedSize(760, 700)
         self.searh_port = self.ui.pushButton_searh_ports
         self.searh_port.setIcon(QIcon(resource_path('static/images/find.svg')))
         self.searh_port.setIconSize(QSize(15, 15))
@@ -114,7 +114,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.max_do = 1
         self.unit = 0x01
 
-        self.ui.tabWidget.setTabText(2, 'Дополнителльные функции')
+        self.ui.tabWidget.setTabText(2, 'Дополнительные функции')
 
         # обработка событий
         self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)
@@ -409,7 +409,7 @@ class MyWindow(QtWidgets.QMainWindow):
         if (isinstance(dio_button, DIButton) and self.ui.radioButton_di_voicing.isChecked()) or \
                 (isinstance(dio_button, DOButton) and (self.ui.radioButton_do_voicing.isChecked() or
                                                        DOButton.DO_CONTROL)) or (
-        self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
+                self.ui.radioButton_dio_voicing.isChecked()):  # если озвучивание DI и(или) DO включено
             dio_button.setCheckable(True)  # делает кнопку DI и(или) DO кликабельной
         # dio_button.set_voicing_flag(True)
         else:
@@ -436,22 +436,23 @@ class MyWindow(QtWidgets.QMainWindow):
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
                 if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
                         (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
-                    self.voicing(dio_button)
+                    self.voicing(dio_button, )
 
     # ОЗВУЧИВАНИЕ DI И DO
     def voicing(self, dio_button):
         try:
-            song_dio_type = pygame.mixer.Sound(
-                resource_path(f'static/voicing/{self.voice_type}/{dio_button.type}/{dio_button.num}.wav'))
-            song_time = song_dio_type.get_length() - 0.3
-            song_dio_type.play()
-            time.sleep(song_time)
-            if not dio_button.is_triggered():
-                song_dio_state = pygame.mixer.Sound(
-                    resource_path(f'static/voicing/{self.voice_type}/on-off/отключено.wav'))
-                song_time = song_dio_state.get_length() - 0.1
-                song_dio_state.play()
+            if dio_button.is_triggered() or (not dio_button.is_triggered() and not self.ui.checkBox.isChecked()):
+                song_dio_type = pygame.mixer.Sound(
+                    resource_path(f'static/voicing/{self.voice_type}/{dio_button.type}/{dio_button.num}.wav'))
+                song_time = song_dio_type.get_length() - 0.3
+                song_dio_type.play()
                 time.sleep(song_time)
+                if not dio_button.is_triggered():
+                    song_dio_state = pygame.mixer.Sound(
+                        resource_path(f'static/voicing/{self.voice_type}/on-off/отключено.wav'))
+                    song_time = song_dio_state.get_length() - 0.1
+                    song_dio_state.play()
+                    time.sleep(song_time)
         except Exception:
             catch_exception()
             msg = "Ошибка озвучивания DI и DO"

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>760</width>
-    <height>730</height>
+    <height>700</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -29,7 +29,7 @@
       <x>10</x>
       <y>140</y>
       <width>351</width>
-      <height>561</height>
+      <height>531</height>
      </rect>
     </property>
     <property name="title">
@@ -39,9 +39,9 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>20</y>
+       <y>30</y>
        <width>331</width>
-       <height>531</height>
+       <height>491</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout_1">
@@ -1212,7 +1212,7 @@
       <x>400</x>
       <y>140</y>
       <width>351</width>
-      <height>561</height>
+      <height>531</height>
      </rect>
     </property>
     <property name="title">
@@ -1222,9 +1222,9 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>20</y>
+       <y>30</y>
        <width>331</width>
-       <height>531</height>
+       <height>491</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
@@ -2392,7 +2392,7 @@
       <x>365</x>
       <y>150</y>
       <width>31</width>
-      <height>581</height>
+      <height>521</height>
      </rect>
     </property>
     <property name="orientation">
@@ -2735,9 +2735,9 @@
          <widget class="QComboBox" name="comboBox_voice_type">
           <property name="geometry">
            <rect>
-            <x>20</x>
+            <x>10</x>
             <y>28</y>
-            <width>251</width>
+            <width>121</width>
             <height>22</height>
            </rect>
           </property>
@@ -2746,6 +2746,22 @@
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
+          </property>
+         </widget>
+         <widget class="QCheckBox" name="checkBox">
+          <property name="geometry">
+           <rect>
+            <x>140</x>
+            <y>29</y>
+            <width>131</width>
+            <height>21</height>
+           </rect>
+          </property>
+          <property name="layoutDirection">
+           <enum>Qt::RightToLeft</enum>
+          </property>
+          <property name="text">
+           <string>Звук при сбросе</string>
           </property>
          </widget>
         </widget>
