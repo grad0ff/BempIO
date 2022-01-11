@@ -2748,7 +2748,7 @@
            </sizepolicy>
           </property>
          </widget>
-         <widget class="QCheckBox" name="checkBox">
+         <widget class="QCheckBox" name="VoiceCtrlCheckBox">
           <property name="geometry">
            <rect>
             <x>140</x>
