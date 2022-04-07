@@ -28,83 +28,69 @@ class MainWindow(QtWidgets.QMainWindow):
     """Главное окно приложения"""
 
     def __init__(self):
-        """Настройка окна приложения"""
+        """Инициализация главного окна приложения"""
         super(MainWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.setWindowTitle('BempIO')
         self.setWindowIcon(QIcon(app_service.resource_path('static/images/BempIO.ico')))
         self.setFixedSize(760, 700)
-        self.polling_time = 0
+        self.polling_time = 0.5
 
         # Инициализация параметров кнопки подключения
-        self.ui.pushButton_connect.setStyleSheet(f'background: {self.ui.pushButton_connect.RED_COLOR}')
-        self.ui.pushButton_connect.setFocus()
+        # self.ui.pushButton_connect.setStyleSheet(f'background: {self.ui.pushButton_connect.RED_COLOR}')
+        self.ui.pushButton_connect.set_style()
+
+        self.ui.pushButton_connect.setFocus()  # задать фокус на кнопку
 
         # Инициализация параметров на вкладке "Параметры подключения"
-        self.ui.tabWidget.setTabText(0, 'Параметры подключения')
+        self.ui.tabWidget.setTabText(0, 'Подключение')
         self.port = None
         if len(self.find_ports()) > 0:
-            self.get_port()
+            self.get_port()  # получить COM-порт
         self.ui.comboBox_speed.addItems(['2400', '4800', '9600', '19200', '38400', '56000', '57600', '115200'])
-        self.ui.comboBox_speed.setCurrentIndex(4)  # выставить скорость по умолчанию 38400
+        self.ui.comboBox_speed.setCurrentIndex(4)  # выставить скорость 38400 бод
         self.speed = None
-        self.get_speed()  # получить сокрость обмена данными
+        self.get_speed()  # получить скорость обмена данными
         self.ui.comboBox_parity.addItems(['N', 'E', 'O'])
         self.parity = None
         self.get_parity()  # получить четность
         self.ui.comboBox_stopbits.addItems(['1', '2'])
         self.stopbits = None
-        self.get_stopbits()  # получить количество стоповых битов
+        self.get_stopbits()  # получить количество стоповых бит
         self.ui.pushButton_searh_ports.setIcon(QIcon(app_service.resource_path('static/images/find.svg')))
         self.ui.pushButton_searh_ports.setIconSize(QSize(15, 15))
 
         # Инициализация параметров на вкладке "Параметры устройства"
-        self.ui.tabWidget.setTabText(1, 'Параметры устройства')
-        self.max_di = 96
-        self.max_do = 96
-        self.ui.spinBox_ied_address.setMinimum(1)
-        self.ui.spinBox_ied_address.setMaximum(247)
+        self.ui.tabWidget.setTabText(1, 'Устройство')
+        self.max_di = self.max_do = 96
+        self.ui.spinBox_ied_address.setRange(1, 247)
         self.unit = 0x01
         self.ui.comboBox_ied_type.addItems(['БЭМП', 'Другое'])
         self.ied_type = None
         self.get_ied()  # получить тип устройства
-        self.ui.spinBox_di_count.setMinimum(1)
-        self.ui.spinBox_di_count.setMaximum(96)
-        self.ui.spinBox_do_count.setMinimum(1)
-        self.ui.spinBox_do_count.setMaximum(96)
-        # self.max_di = 1
-        # self.ui.spinBox_di_count.setValue(96)
-        # self.max_do = 1
-        # self.unit = 0x01
-        # self.ui.spinBox_do_count.setValue(96)
+        self.ui.spinBox_di_count.setRange(1, 96)
+        self.ui.spinBox_do_count.setRange(1, 96)
 
         # Инициализация параметров на вкладке "Дополнительные функции"
-        self.ui.tabWidget.setTabText(2, 'Дополнительные функции')
+        self.ui.tabWidget.setTabText(2, 'Функции')
         self.ui.comboBox_voice_type.addItems(['Дарья', '2', '3', '4'])
         self.voice_type = None
-        self.get_voice()
-
-        # Инициализация параметров на вкладке "DI"
+        self.get_voice()  # получить тип голоса
 
         # Обработка событий
-        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)
-        self.ui.comboBox_com_port.activated.connect(self.get_port)
+        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)  # найти активные COM-порты
+        self.ui.comboBox_com_port.activated.connect(self.get_port)  # выбрать COM-порт из выпадающего списка
         self.ui.comboBox_ied_type.activated.connect(self.get_ied)  # выбрать устройство из выпадающего списка
-        self.ui.comboBox_parity.activated.connect(self.get_parity)
-        self.ui.comboBox_speed.activated.connect(self.get_speed)
-        self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)
-        self.ui.comboBox_voice_type.activated.connect(self.get_voice)
-
-        self.ui.pushButton_connect.clicked.connect(self.check_connect)  # подключиться к устройству
-        self.ui.pushButton_do_control.clicked.connect(self.control_do)  # включить режим управления релейными выходами
+        self.ui.comboBox_parity.activated.connect(self.get_parity)  # выставить четность
+        self.ui.comboBox_speed.activated.connect(self.get_speed)  # выбрать скорость из выпадающего списка
+        self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)  # выставить количество стоповых бит
+        self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
+        self.ui.pushButton_connect.clicked.connect(self.connect)  # подключиться к устройству
+        self.ui.pushButton_do_control.clicked.connect(self.control_do)  # включить режим управления реле
 
         # Тест фичи
-        self.ui.pushButton_searh_ports.clicked.connect(self.test)
-
-    def get_voice(self):
-        """ Возвращает текущий тип голоса озвучивания"""
-        self.voice_type = self.ui.comboBox_voice_type.currentText()
+        # self.ui.pushButton_searh_ports.clicked.connect(self.test)
 
     @staticmethod
     def show_msg(msg, msg_type='Error'):
@@ -153,6 +139,10 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.exception(e)
 
+    def get_voice(self):
+        """ Возвращает текущий тип голоса озвучивания"""
+        self.voice_type = self.ui.comboBox_voice_type.currentText()
+
     def find_ports(self):
         """ Возвращает список COM-портов или выводит инфо об ошибке поиска"""
         self.ui.comboBox_com_port.clear()  # очистить список COM-портов
@@ -199,7 +189,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_ied_params()
 
     def set_ied_params(self):
-        """Инициализацтя параметров DI и DO устройства"""
+        """Инициализация параметров DI и DO устройства"""
         di_address = self.ui.lineEdit_di_01_address
         do_address = self.ui.lineEdit_do_01_address
         di_count = self.ui.spinBox_di_count
@@ -221,11 +211,13 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.ied_type == 'Другое':
             change_params(False, '0x', '0x')
 
-    def check_connect(self, *args):
+    def connect(self):
         """Подключение к устройству"""
-        if self.ui.pushButton_connect.text() == "ПОДКЛЮЧИТЬ" or self.ui.pushButton_connect.isChecked():
+        if self.ui.pushButton_connect.is_pressed():
+            print('not isChecked')
             self.connecting()
         else:
+            print('isChecked')
             self.disconnecting()
 
     def connecting(self):
@@ -362,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.groupBox_do_control.setEnabled(a0)
         self.ui.groupBox_di.setEnabled(a0)
         self.ui.groupBox_do.setEnabled(a0)
-        self.ui.pushButton_connect.change_style(a0)
+        # self.ui.pushButton_connect.set_style(a0)
         self.ui.pushButton_do_control.setEnabled(a0)
         self.ui.comboBox_voice_type.setEnabled(False)
 
@@ -471,13 +463,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if dio_button.is_triggered():
             if dio_button.isChecked():  # если нажата кнопка DIO, то при срабатывании
                 if isinstance(dio_button, DOButton) and DOButton.DO_CONTROL:
-                    dio_button.change_style('controlled')
+                    dio_button.set_style('controlled')
                 else:
-                    dio_button.change_style('pressed')  # цвет меняется на синий
+                    dio_button.set_style('pressed')  # цвет меняется на синий
             else:
-                dio_button.change_style('triggered')  # цвет меняется на зеленый
+                dio_button.set_style('triggered')  # цвет меняется на зеленый
         else:
-            dio_button.change_style('default')  # цвет меняется на исходный
+            dio_button.set_style('default')  # цвет меняется на исходный
 
     def voice_over_preparing(self, dio_button):
         """Подготовка к озвучиванию DIO"""
