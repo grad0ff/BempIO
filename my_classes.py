@@ -3,6 +3,11 @@ from PyQt5.QtGui import QFont
 
 
 class MyButton(QPushButton):
+    RED_COLOR = 'rgb(255, 100, 100)'
+    GREEN_COLOR = 'rgb(50, 255, 50)'
+    BLUE_COLOR = 'rgb(150, 200, 250)'
+    GREY_COLOR = 'rgb(240, 240, 240)'
+
     def __init__(self, *args):
         super().__init__(*args)
         self.setCheckable(True)
@@ -29,11 +34,11 @@ class ConnectButton(MyButton):
 
     def change_style(self, val: bool):
         if val:
-            self.setStyleSheet('background: rgb(50,255,50)')
+            self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
             self.setText('ОТКЛЮЧИТЬ')
         else:
             self.setText('ПОДКЛЮЧИТЬ')
-            self.setStyleSheet('background: rgb(255,85,70)')
+            self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
 
 
 class DI0Button(MyButton):
@@ -53,6 +58,7 @@ class DI0Button(MyButton):
             else:
                 self.setChecked(False)
             print(DOButton.DO_CONTROL)
+
     # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
     def setCheckable(self, val: bool):
         super().setCheckable(val)
@@ -72,13 +78,13 @@ class DI0Button(MyButton):
 
     def change_style(self, state):
         if state == 'default':
-            self.setStyleSheet('background:  #f0f0f0')
+            self.setStyleSheet(f'background: {DI0Button.BLUE_COLOR}')
             self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
         else:
             if state == 'triggered':
-                self.setStyleSheet('background: rgb(50,255,50)')
+                self.setStyleSheet(f'background: {DI0Button.GREEN_COLOR}')
             elif state == 'pressed':
-                self.setStyleSheet('background: rgb(150,200,250)')
+                self.setStyleSheet(f'background: {DI0Button.BLUE_COLOR}')
             self.setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
 
     def get_triggered_list(self):
@@ -126,4 +132,4 @@ class DOButton(DI0Button):
     def change_style(self, state):
         super().change_style(state)
         if state == 'controlled':
-            self.setStyleSheet('background: rgb(255,85,70)')
+            self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
