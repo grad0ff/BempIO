@@ -9,7 +9,7 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from my_classes import DIButton, DOButton, ConnectButton, DOControl
+from app_classes import DIButton, DOButton, ConnectButton, DOControl
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):

@@ -18,7 +18,7 @@ from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import QMessageBox
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.exceptions import ConnectionException
-from my_classes import *
+from app_classes import *
 
 locale.setlocale(locale.LC_ALL, 'ru-RU')
 log = app_logger.get_app_logger(__name__)
@@ -35,7 +35,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle('BempIO')
         self.setWindowIcon(QIcon(app_service.resource_path('static/images/BempIO.ico')))
         self.setFixedSize(760, 700)
-        self.polling_time = 0.5
+        self.polling_time = 0
 
         # Инициализация параметров кнопки подключения
         # self.ui.pushButton_connect.setStyleSheet(f'background: {self.ui.pushButton_connect.RED_COLOR}')
@@ -66,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.max_di = self.max_do = 96
         self.ui.spinBox_ied_address.setRange(1, 247)
         self.unit = 0x01
-        self.ui.comboBox_ied_type.addItems(['БЭМП', 'Другое'])
+        self.ui.comboBox_ied_type.addItems(['БЭМП'])
         self.ied_type = None
         self.get_ied()  # получить тип устройства
         self.ui.spinBox_di_count.setRange(1, 96)
@@ -86,9 +86,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_speed.activated.connect(self.get_speed)  # выбрать скорость из выпадающего списка
         self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)  # выставить количество стоповых бит
         self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
-        self.ui.pushButton_connect.clicked.connect(self.connect)  # подключиться к устройству
+        self.ui.pushButton_connect.clicked.connect(self.connect_manger)  # подключиться к устройству
         self.ui.pushButton_do_control.clicked.connect(self.control_do)  # включить режим управления реле
 
+        self.client = None
         # Тест фичи
         # self.ui.pushButton_searh_ports.clicked.connect(self.test)
 
@@ -190,17 +191,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def set_ied_params(self):
         """Инициализация параметров DI и DO устройства"""
-        di_address = self.ui.lineEdit_di_01_address
-        do_address = self.ui.lineEdit_do_01_address
+        di_01_field = self.ui.lineEdit_di_01_address
+        do_01_field = self.ui.lineEdit_do_01_address
         di_count = self.ui.spinBox_di_count
         do_count = self.ui.spinBox_do_count
 
         def change_params(flag, di_hex, do_hex):
-            di_address.setDisabled(flag)
-            di_address.setText(di_hex)
+            di_01_field.setDisabled(flag)
+            di_01_field.setText(di_hex)
             di_count.setDisabled(flag)
-            do_address.setDisabled(flag)
-            do_address.setText(do_hex)
+            do_01_field.setDisabled(flag)
+            do_01_field.setText(do_hex)
             do_count.setDisabled(flag)
 
         if self.ied_type == 'БЭМП':
@@ -211,68 +212,57 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.ied_type == 'Другое':
             change_params(False, '0x', '0x')
 
-    def connect(self):
-        """Подключение к устройству"""
-        if self.ui.pushButton_connect.is_pressed():
-            print('not isChecked')
-            self.connecting()
+    def connect_manger(self):
+        """Менеджер подключения."""
+        if self.client is None:
+            print('connecting')
+            self.client = self.connecting()
+            print(self.client)
+            if self.client is not None:
+                self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
+                self.check_ied_params()  # проверка параметров устройства
+                self.show_dio_buttons()  # отображение актуального числа di и do
+                self.change_buttons_style(True)  # активация/деактивация кнопок управления
+                pygame.init()  # инициализация медиапроигрывателя
+                self.run_threads()
         else:
-            print('isChecked')
+            print('disconnecting')
             self.disconnecting()
 
     def connecting(self):
-        """Проверка связи с устройством"""
-
-        msg = "Проверка связи с устройством..."
-        self.send_to_statusbar(msg)
-        port = self.port
+        """Проверяет связь с устройством, возвращает клиент"""
+        self.send_to_statusbar(f'Проверка связи с {self.ied_type}...')
         try:
-            self.client = ModbusSerialClient(
+            client = ModbusSerialClient(
                 method='ASCII',
-                port=port,
+                port=self.port,
                 baudrate=self.speed,
                 bytesize=8,
                 parity=self.parity,
                 stopbits=self.stopbits)
+            assert client.connect() and client.is_socket_open()
+            num1 = str(client.read_holding_registers(0x010C, 1, unit=self.unit).registers[0])
+            num2 = str(client.read_holding_registers(0x010D, 1, unit=self.unit).registers[0])
+            assert num1.isdigit() and num1.isdigit() and 5 < len(num1 + num2) < 9
+        except AssertionError:
+            MainWindow.show_msg('Неправильные параметры подключения или COM-порт занят!', 'Warning')
         except Exception as e:
             log.exception(e)
-            msg = "Ошибка проверки связи с устройством!"
-            MainWindow.show_msg(msg, 'Error')
+            MainWindow.show_msg(e)
+            self.client.close()
         else:
-            try:
-                assert self.client.connect()
-                assert self.client.is_socket_open()
-            except AssertionError:
-                msg = 'Неправильные параметры подключения или COM-порт занят!'
-                MainWindow.show_msg('Warning', msg)
-                self.send_to_statusbar(msg)
-            except Exception as e:
-                log.exception(e)
-                MainWindow.show_msg(e)
-            else:
-                try:
-                    msg = f"Связь c {self.ied_type} установлена!"
-                    self.send_to_statusbar(msg)
-                    self.check_ied_params()  # проверка параметров устройства
-                    self.show_dio_buttons()  # отображение актуального числа di и do
-                    self.change_buttons_style(True)  # активация/деактивация кнопок управления
-                    self.run_threads()
-                    pygame.init()  # инициализация медиапроигрывателя
-                    msg = f"Устройство {self.ied_type} подключено!"
-                    self.send_to_statusbar(msg)
-                except Exception as e:
-                    log.exception(e)
+            self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
+            print(client)
+            return client
 
     def check_ied_params(self):
         """Проверка параметров подключенного устройства"""
-        msg = f"Проверка параметров устройства {self.ied_type}..."
-        self.send_to_statusbar(msg)
-        self.check_max_dio()
-        self.check_dio_01_address()
+        self.send_to_statusbar(f'Проверка параметров устройства {self.ied_type}...')
+        self.get_max_dio()
+        self.get_dio_01_address()
 
-    def check_max_dio(self):
-        """Определение количества DI и DO в подключенном устройстве"""
-
+    def get_max_dio(self):
+        """Определяет количество DI и DO в подключенном устройстве"""
         try:
             if self.ied_type == 'БЭМП':
                 try:
@@ -280,11 +270,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.max_do = self.client.read_holding_registers(0x0101, 1, unit=self.unit).registers[0]
                 except Exception as e:
                     log.exception(e)
-                    msg = "Ошибка чтения количества DI и DO"
+                    msg = 'Ошибка чтения количества DI и DO d БЭМП'
                     MainWindow.show_msg(msg, 'Error')
-            elif self.ied_type == 'Прочее':
-                self.max_di = int(self.ui.spinBox_di_count.text())
-                self.max_do = int(self.ui.spinBox_di_count.text())
+            # elif self.ied_type == 'Другое':
+            #     self.max_di = int(self.ui.spinBox_di_count.text())
+            #     self.max_do = int(self.ui.spinBox_di_count.text())
             assert isinstance(self.max_di, int), 'Неправильный адрес DI 1'
             assert isinstance(self.max_do, int), 'Неправильный адрес DO 1'
         except AssertionError:
@@ -293,33 +283,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.send_to_statusbar(msg)
         except Exception as e:
             log.exception(e)
-            self.client.close()
             MainWindow.show_msg(e)
+            self.client.close()
         else:
             self.ui.spinBox_di_count.setValue(self.max_di)
             self.ui.spinBox_do_count.setValue(self.max_do)
             msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
             self.send_to_statusbar(msg)
 
-    def check_dio_01_address(self):
-        """Определение адреса DI_1 и DO_1 в подключенном устройстве"""
-
+    def get_dio_01_address(self):
+        """Определяет адреса DI_1 и DO_1 подключенного устройства"""
         di_01_address = self.ui.lineEdit_di_01_address.text()
         do_01_address = self.ui.lineEdit_do_01_address.text()
         try:
-            assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
-            assert isinstance(int(do_01_address, 16), int), "Неправильный адрес DO 1 "
+            assert isinstance(int(di_01_address, 16), int), 'Некорректный адрес DI 1'
+            assert isinstance(int(do_01_address, 16), int), 'Некорректный адрес DO 1'
         except AssertionError:
-            msg = "Некорректные параметры DI и DO"
-            self.send_to_statusbar(msg)
-            MainWindow.show_msg(msg, 'Error')
+            MainWindow.show_msg('Некорректные параметры DI и DO', 'Error')
         except Exception as e:
             log.exception(e)
             self.client.close()
             MainWindow.show_msg(e)
         else:
-            msg = f"Адрес DI 1 - {di_01_address}\nАдрес DO 1 - {do_01_address}"
-            self.send_to_statusbar(msg)
+            self.send_to_statusbar(f'Адрес DI 1 - {di_01_address}\nАдрес DO 1 - {do_01_address}')
             self.di_start_address = int(di_01_address, 16)
             self.do_start_address = int(do_01_address, 16)
 
@@ -354,8 +340,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.groupBox_do_control.setEnabled(a0)
         self.ui.groupBox_di.setEnabled(a0)
         self.ui.groupBox_do.setEnabled(a0)
-        # self.ui.pushButton_connect.set_style(a0)
-        self.ui.pushButton_do_control.setEnabled(a0)
+        self.ui.pushButton_connect.set_style(a0)
+
+        self.ui.pushButton_do_control.setEnabled(False)
         self.ui.comboBox_voice_type.setEnabled(False)
 
     def disconnecting(self):
@@ -376,14 +363,16 @@ class MainWindow(QtWidgets.QMainWindow):
             msg = "Ошибка отключения от устройства"
             MainWindow.show_msg(msg)
         else:
-            self.client.close()
             msg = f"Устройство {self.ied_type} отключено!"
             self.send_to_statusbar(msg)
             self.get_ied()
             self.change_buttons_style(False)
             self.unselect_dio(self.ui.groupBox_di)
             self.unselect_dio(self.ui.groupBox_do)
+            self.client.close()
             pygame.quit()
+        finally:
+            self.client = None
 
     def unselect_dio(self, group_dio):
         """отображение ранее скрытых DI и DO"""

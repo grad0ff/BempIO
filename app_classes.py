@@ -16,12 +16,6 @@ class MyButton(QPushButton):
         self.setCheckable(True)
         self.__pressed = False
 
-    # НАЖАТИЕ НА КНОПКУ
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        print(f'\n\tmousePressEvent {self} \n')
-        self.change_state()
-
     def is_pressed(self):
         return self.__pressed
 
@@ -29,12 +23,10 @@ class MyButton(QPushButton):
         try:
             if self.is_pressed():
                 # если кнопка нажата
-                print(f'\n\t{self} была нажата\n')
                 self.setChecked(False)
                 self.set_style(False)
                 self.__pressed = False
             else:
-                print(f'\n\t{self} была не нажата\n')
                 self.setChecked(True)
                 self.set_style(True)
                 self.__pressed = True
@@ -46,17 +38,36 @@ class MyButton(QPushButton):
 
 
 class ConnectButton(MyButton):
-    """ Клас кнопки подключения к устройству"""
+    """ Класс кнопки подключения к устройству"""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.__ied_is_connected = False
+
+    # НАЖАТИЕ НА КНОПКУ
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        # print(f'\n\tmousePressEvent {self} \n')
+        # self.change_state()
+        if self.is_pressed() and self.__ied_is_connected:
+            # если кнопка нажата
+            self.setChecked(False)
+            self.set_style(False)
+            self.__pressed = False
+        else:
+            self.setChecked(True)
+            self.set_style(True)
+            self.__pressed = True
 
     def set_style(self, is_pressed=False):
         """Меняет внешний вид и текст кнопки подключения"""
         if is_pressed:
             self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
-            self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
+            # self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
             self.setText('ОТКЛЮЧИТЬ')
         else:
             self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
-            self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
+            # self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
             self.setText('ПОДКЛЮЧИТЬ')
         self.setIconSize(QSize(50, 50))
 
