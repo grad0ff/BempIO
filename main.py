@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import pygame
+from pymodbus.exceptions import *
 import serial.tools.list_ports
 
 import app_logger
@@ -38,16 +39,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.polling_time = 0
 
         # Инициализация параметров кнопки подключения
-        # self.ui.pushButton_connect.setStyleSheet(f'background: {self.ui.pushButton_connect.RED_COLOR}')
         self.ui.pushButton_connect.set_style()
-
         self.ui.pushButton_connect.setFocus()  # задать фокус на кнопку
 
         # Инициализация параметров на вкладке "Параметры подключения"
         self.ui.tabWidget.setTabText(0, 'Подключение')
+        self.ui.pushButton_searh_ports.setIcon(QIcon(app_service.resource_path('static/images/find.svg')))
+        self.ui.pushButton_searh_ports.setIconSize(QSize(15, 15))
         self.port = None
-        if len(self.find_ports()) > 0:
-            self.get_port()  # получить COM-порт
+        self.find_ports()
+        self.get_port()  # получить COM-порт
         self.ui.comboBox_speed.addItems(['2400', '4800', '9600', '19200', '38400', '56000', '57600', '115200'])
         self.ui.comboBox_speed.setCurrentIndex(4)  # выставить скорость 38400 бод
         self.speed = None
@@ -58,19 +59,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_stopbits.addItems(['1', '2'])
         self.stopbits = None
         self.get_stopbits()  # получить количество стоповых бит
-        self.ui.pushButton_searh_ports.setIcon(QIcon(app_service.resource_path('static/images/find.svg')))
-        self.ui.pushButton_searh_ports.setIconSize(QSize(15, 15))
+        self.address = None
+        self.set_ied_address()
 
         # Инициализация параметров на вкладке "Параметры устройства"
         self.ui.tabWidget.setTabText(1, 'Устройство')
         self.max_di = self.max_do = 96
         self.ui.spinBox_ied_address.setRange(1, 247)
-        self.unit = 0x01
-        self.ui.comboBox_ied_type.addItems(['БЭМП'])
+        self.ui.comboBox_ied_type.addItems(['БЭМП', 'Другое'])
         self.ied_type = None
         self.get_ied()  # получить тип устройства
-        self.ui.spinBox_di_count.setRange(1, 96)
-        self.ui.spinBox_do_count.setRange(1, 96)
+        self.ui.spinBox_di_count.setRange(1, self.max_di)
+        self.ui.spinBox_do_count.setRange(1, self.max_do)
 
         # Инициализация параметров на вкладке "Дополнительные функции"
         self.ui.tabWidget.setTabText(2, 'Функции')
@@ -79,15 +79,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.get_voice()  # получить тип голоса
 
         # Обработка событий
-        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)  # найти активные COM-порты
-        self.ui.comboBox_com_port.activated.connect(self.get_port)  # выбрать COM-порт из выпадающего списка
-        self.ui.comboBox_ied_type.activated.connect(self.get_ied)  # выбрать устройство из выпадающего списка
-        self.ui.comboBox_parity.activated.connect(self.get_parity)  # выставить четность
-        self.ui.comboBox_speed.activated.connect(self.get_speed)  # выбрать скорость из выпадающего списка
-        self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)  # выставить количество стоповых бит
-        self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
         self.ui.pushButton_connect.clicked.connect(self.connect_manger)  # подключиться к устройству
-        self.ui.pushButton_do_control.clicked.connect(self.control_do)  # включить режим управления реле
+        self.ui.comboBox_com_port.activated.connect(self.get_port)  # выбрать COM-порт из выпадающего списка
+        self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)  # найти активные COM-порты
+        self.ui.comboBox_speed.activated.connect(self.get_speed)  # выбрать скорость из выпадающего списка
+        self.ui.comboBox_parity.activated.connect(self.get_parity)  # выставить четность
+        self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)  # выставить количество стоповых бит
+        self.ui.spinBox_ied_address.valueChanged.connect(self.set_ied_address)
+        self.ui.comboBox_ied_type.activated.connect(self.get_ied)  # выбрать устройство из выпадающего списка
+        self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
+        self.ui.pushButton_do_control.clicked.connect(self.do_control)  # включить режим управления реле
 
         self.client = None
         # Тест фичи
@@ -100,7 +101,6 @@ class MainWindow(QtWidgets.QMainWindow):
         msg_icon = None
         msg_box = QMessageBox()
         if msg_type == 'Error':
-            msg += f'Непредвиденная ошибка: ' + msg
             msg_icon = QMessageBox.Critical
             window_icon = QIcon(app_service.resource_path('static/images/critical.ico'))
         if msg_type == 'Info':
@@ -126,12 +126,6 @@ class MainWindow(QtWidgets.QMainWindow):
             dio.setVisible(False)
         return dio_buttons_list[:max_dio]
 
-    def do_control(self):
-        if self.ui.pushButton_do_control.text() == '':
-            DOButton.DO_CONTROL = True
-        else:
-            DOButton.DO_CONTROL = True
-
     def test(self):
         """Тестирование фичей"""
         print('Запуск теста... ')
@@ -140,77 +134,76 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.exception(e)
 
-    def get_voice(self):
-        """ Возвращает текущий тип голоса озвучивания"""
-        self.voice_type = self.ui.comboBox_voice_type.currentText()
+    def get_port(self):
+        """Выбор COM-порта из выпадающего списка"""
+        self.port = self.ui.comboBox_com_port.currentText()
+        self.send_to_statusbar(f'Выбран порт:  {self.port}')
 
     def find_ports(self):
         """ Возвращает список COM-портов или выводит инфо об ошибке поиска"""
-        self.ui.comboBox_com_port.clear()  # очистить список COM-портов
         self.send_to_statusbar("Поиск COM-портов...")
-
+        self.ui.comboBox_com_port.clear()  # очистить список COM-портов
         try:
             com_ports = serial.tools.list_ports.comports()  # получить список активных COM-портов
         except Exception as e:
             log.exception(e)
-            MainWindow.show_msg('Warning', 'Ошибка поиска COM-порта!')
+            MainWindow.show_msg('Ошибка поиска COM-порта!', 'Warning')
         else:
-            ports = sorted(list(map(lambda x: x.name, com_ports)))
+            ports = sorted(list(map(lambda port: port.name, com_ports)))
             self.send_to_statusbar(f'Поиск завершен. Найдено COM-портов:  {len(ports)}')
             if len(ports) == 0:
                 ports.append('Нет')
             self.ui.comboBox_com_port.addItems(ports)
-
             return ports
 
-    def get_port(self):
-        """Выбор COM-порта из выпадающего списка"""
-        self.port = self.ui.comboBox_com_port.currentText()
-        msg = f'Выбран порт:  {self.port}'
-        self.send_to_statusbar(msg)
-
     def get_speed(self):
-        """ Возвращает текущую скорость обмена данными"""
-
+        """ Возвращает выбранную скорость обмена данными"""
         self.speed = int(self.ui.comboBox_speed.currentText())
+        self.send_to_statusbar(f'Выбрана скорость:  {self.speed} бод')
 
     def get_parity(self):
-        """ Возвращает текущую четность"""
+        """ Возвращает выбранную четность """
         self.parity = self.ui.comboBox_parity.currentText()
+        self.send_to_statusbar(f'Выбрана четность:  {self.parity}')
 
     def get_stopbits(self):
-
         """ Возвращает текущее количество стоповых битов"""
         self.stopbits = int(self.ui.comboBox_stopbits.currentText())
+        self.send_to_statusbar(f'Выбрано количество стоповых бит:  {self.stopbits}')
+
+    def set_ied_address(self):
+        self.address = self.ui.spinBox_ied_address.value()
+        self.send_to_statusbar(f'Выставлен адрес:  {self.address}')
 
     def get_ied(self):
-        """Выбор устройства из выпадающего списка"""
+        """ Выбирает устройство из выпадающего списка и применяет соответствующие настройки """
         self.ied_type = self.ui.comboBox_ied_type.currentText()
         self.send_to_statusbar(f'Выбрано устройство:  {self.ied_type}')
-        self.set_ied_params()
 
-    def set_ied_params(self):
-        """Инициализация параметров DI и DO устройства"""
-        di_01_field = self.ui.lineEdit_di_01_address
-        do_01_field = self.ui.lineEdit_do_01_address
-        di_count = self.ui.spinBox_di_count
-        do_count = self.ui.spinBox_do_count
-
-        def change_params(flag, di_hex, do_hex):
-            di_01_field.setDisabled(flag)
-            di_01_field.setText(di_hex)
-            di_count.setDisabled(flag)
-            do_01_field.setDisabled(flag)
-            do_01_field.setText(do_hex)
-            do_count.setDisabled(flag)
+        def change_ied_params(flag, di_hex, do_hex):
+            self.ui.lineEdit_di_01_address.setDisabled(flag)
+            self.ui.lineEdit_di_01_address.setText(di_hex)
+            self.ui.spinBox_di_count.setDisabled(flag)
+            self.ui.lineEdit_do_01_address.setDisabled(flag)
+            self.ui.lineEdit_do_01_address.setText(do_hex)
+            self.ui.spinBox_do_count.setDisabled(flag)
 
         if self.ied_type == 'БЭМП':
-            change_params(True, '0x0500', '0x0700')
-            di_count.setValue(self.max_di)
-            do_count.setValue(self.max_do)
-
+            change_ied_params(True, '0x0500', '0x0700')
+            self.ui.spinBox_di_count.setValue(self.max_di)
+            self.ui.spinBox_do_count.setValue(self.max_do)
         elif self.ied_type == 'Другое':
-            change_params(False, '0x', '0x')
+            change_ied_params(False, '0x', '0x')
+
+    def get_voice(self):
+        """ Возвращает текущий тип голоса озвучивания"""
+        self.voice_type = self.ui.comboBox_voice_type.currentText()
+
+    def do_control(self):
+        if self.ui.pushButton_do_control.text() == '':
+            DOButton.DO_CONTROL = True
+        else:
+            DOButton.DO_CONTROL = True
 
     def connect_manger(self):
         """Менеджер подключения."""
@@ -240,11 +233,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 bytesize=8,
                 parity=self.parity,
                 stopbits=self.stopbits)
-            assert client.connect() and client.is_socket_open()
-            num1 = str(client.read_holding_registers(0x010C, 1, unit=self.unit).registers[0])
-            num2 = str(client.read_holding_registers(0x010D, 1, unit=self.unit).registers[0])
-            assert num1.isdigit() and num1.isdigit() and 5 < len(num1 + num2) < 9
-        except AssertionError:
+            assert client.connect(), 'Ошибка соединения с устройством'
+            assert client.is_socket_open(), 'Ошибка открытия порта'
+            num1 = str(client.read_holding_registers(0x010C, unit=self.address).registers[0])
+            num2 = str(client.read_holding_registers(0x010D, unit=self.address).registers[0])
+            # assert num1.isdigit() and num1.isdigit() and 5 < len(num1 + num2) < 9
+        except ModbusIOException:
             MainWindow.show_msg('Неправильные параметры подключения или COM-порт занят!', 'Warning')
         except Exception as e:
             log.exception(e)
@@ -252,7 +246,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.client.close()
         else:
             self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
-            print(client)
             return client
 
     def check_ied_params(self):
@@ -266,11 +259,11 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             if self.ied_type == 'БЭМП':
                 try:
-                    self.max_di = self.client.read_holding_registers(0x0100, 1, unit=self.unit).registers[0]
-                    self.max_do = self.client.read_holding_registers(0x0101, 1, unit=self.unit).registers[0]
+                    self.max_di = self.client.read_holding_registers(0x0100, unit=self.address).registers[0]
+                    self.max_do = self.client.read_holding_registers(0x0101, unit=self.address).registers[0]
                 except Exception as e:
                     log.exception(e)
-                    msg = 'Ошибка чтения количества DI и DO d БЭМП'
+                    msg = 'Ошибка чтения количества DI и DO БЭМП'
                     MainWindow.show_msg(msg, 'Error')
             # elif self.ied_type == 'Другое':
             #     self.max_di = int(self.ui.spinBox_di_count.text())
@@ -420,7 +413,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Отправка запроса в устройство"""
 
         try:
-            dio_list = self.client.read_coils(dio_address, max_dio, unit=self.unit).bits  # считывание регистров
+            dio_list = self.client.read_coils(dio_address, max_dio, unit=self.address).bits  # считывание регистров
         except (AttributeError, ConnectionException):
             # QTimer.singleShot(0, self.ui.pushButton_connect.click)
             sys.exit()
@@ -491,7 +484,7 @@ class MainWindow(QtWidgets.QMainWindow):
             msg = "Ошибка озвучивания DI и DO"
             MainWindow.show_msg(msg, 'Ошибка')
 
-    def control_do(self):
+    def do_control(self):
         pass
 
     def closeEvent(self, event):

@@ -1,5 +1,10 @@
-2022-04-08 12:11:41,572 - [ERROR] - __main__ - (main.py).get_dio_01_address(305) - invalid literal for int() with base 16: '0x'
+2022-04-08 21:53:01,969 - [ERROR] - __main__ - (main.py).connecting(245) - 'ModbusIOException' object has no attribute 'registers'
 Traceback (most recent call last):
-  File "C:/Python Projects/BempIO/main.py", line 298, in get_dio_01_address
-    assert isinstance(int(di_01_address, 16), int), "Неправильный адрес DI 1"
-ValueError: invalid literal for int() with base 16: '0x'
+  File "E:\Python\Projects\BempIO\main.py", line 239, in connecting
+    num1 = str(client.read_holding_registers(0x010C, unit=self.address).registers[0])
+AttributeError: 'ModbusIOException' object has no attribute 'registers'
+2022-04-08 21:54:01,550 - [ERROR] - __main__ - (main.py).connecting(244) - 'ModbusIOException' object has no attribute 'registers'
+Traceback (most recent call last):
+  File "E:\Python\Projects\BempIO\main.py", line 238, in connecting
+    num1 = str(client.read_holding_registers(0x010C, 1, unit=self.address).registers[0])
+AttributeError: 'ModbusIOException' object has no attribute 'registers'
