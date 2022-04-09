@@ -1,10 +1,17 @@
-2022-04-08 21:53:01,969 - [ERROR] - __main__ - (main.py).connecting(245) - 'ModbusIOException' object has no attribute 'registers'
+2022-04-09 12:30:13,955 - [ERROR] - __main__ - (main.py).<module>(521) - placeholderText(self): too many arguments
 Traceback (most recent call last):
-  File "E:\Python\Projects\BempIO\main.py", line 239, in connecting
-    num1 = str(client.read_holding_registers(0x010C, unit=self.address).registers[0])
-AttributeError: 'ModbusIOException' object has no attribute 'registers'
-2022-04-08 21:54:01,550 - [ERROR] - __main__ - (main.py).connecting(244) - 'ModbusIOException' object has no attribute 'registers'
+  File "C:/Python Projects/BempIO/main.py", line 517, in <module>
+    application = MainWindow()
+  File "C:/Python Projects/BempIO/main.py", line 72, in __init__
+    self.ui.lineEdit_di_01_address.placeholderText('0x')
+TypeError: placeholderText(self): too many arguments
+2022-04-09 12:30:44,621 - [ERROR] - __main__ - (main.py).get_start_addresses(220) - invalid literal for int() with base 16: '0x'
 Traceback (most recent call last):
-  File "E:\Python\Projects\BempIO\main.py", line 238, in connecting
-    num1 = str(client.read_holding_registers(0x010C, 1, unit=self.address).registers[0])
-AttributeError: 'ModbusIOException' object has no attribute 'registers'
+  File "C:/Python Projects/BempIO/main.py", line 216, in get_start_addresses
+    assert isinstance(int(do_start_address, 16), int), 'Некорректный адрес DO 1'
+ValueError: invalid literal for int() with base 16: '0x'
+2022-04-09 12:35:13,947 - [ERROR] - __main__ - (main.py).get_start_addresses(220) - invalid literal for int() with base 16: ''
+Traceback (most recent call last):
+  File "C:/Python Projects/BempIO/main.py", line 216, in get_start_addresses
+    assert isinstance(int(do_start_address, 16), int), 'Некорректный адрес DO 1'
+ValueError: invalid literal for int() with base 16: ''

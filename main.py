@@ -60,15 +60,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stopbits = None
         self.get_stopbits()  # получить количество стоповых бит
         self.address = None
+        self.ui.spinBox_ied_address.setValue(1)
+        self.ui.spinBox_ied_address.setDisabled(True)
         self.set_ied_address()
 
         # Инициализация параметров на вкладке "Параметры устройства"
         self.ui.tabWidget.setTabText(1, 'Устройство')
-        self.max_di = self.max_do = 96
-        self.ui.spinBox_ied_address.setRange(1, 247)
         self.ui.comboBox_ied_type.addItems(['БЭМП', 'Другое'])
         self.ied_type = None
         self.get_ied()  # получить тип устройства
+        self.ui.lineEdit_di_01_address.setPlaceholderText('hex')
+        self.ui.lineEdit_do_01_address.setPlaceholderText('hex')
+
+        self.di_start_address = None
+        self.do_start_address = None
+        self.get_start_addresses()
+        self.max_di = self.max_do = 96
+        self.ui.spinBox_ied_address.setRange(1, 247)
         self.ui.spinBox_di_count.setRange(1, self.max_di)
         self.ui.spinBox_do_count.setRange(1, self.max_do)
 
@@ -87,6 +95,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_stopbits.activated.connect(self.get_stopbits)  # выставить количество стоповых бит
         self.ui.spinBox_ied_address.valueChanged.connect(self.set_ied_address)
         self.ui.comboBox_ied_type.activated.connect(self.get_ied)  # выбрать устройство из выпадающего списка
+        self.ui.lineEdit_di_01_address.textEdited.connect(self.get_start_addresses)
+        self.ui.lineEdit_do_01_address.textEdited.connect(self.get_start_addresses)
+
         self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
         self.ui.pushButton_do_control.clicked.connect(self.do_control)  # включить режим управления реле
 
@@ -183,17 +194,36 @@ class MainWindow(QtWidgets.QMainWindow):
         def change_ied_params(flag, di_hex, do_hex):
             self.ui.lineEdit_di_01_address.setDisabled(flag)
             self.ui.lineEdit_di_01_address.setText(di_hex)
+            self.ui.spinBox_di_count.setValue(96)
             self.ui.spinBox_di_count.setDisabled(flag)
+
             self.ui.lineEdit_do_01_address.setDisabled(flag)
             self.ui.lineEdit_do_01_address.setText(do_hex)
+            self.ui.spinBox_do_count.setValue(96)
             self.ui.spinBox_do_count.setDisabled(flag)
 
         if self.ied_type == 'БЭМП':
             change_ied_params(True, '0x0500', '0x0700')
-            self.ui.spinBox_di_count.setValue(self.max_di)
-            self.ui.spinBox_do_count.setValue(self.max_do)
         elif self.ied_type == 'Другое':
-            change_ied_params(False, '0x', '0x')
+            change_ied_params(False, '', '')
+
+    def get_start_addresses(self):
+        """Определяет адреса DI_1 и DO_1 подключенного устройства"""
+        di_start_address = self.ui.lineEdit_di_01_address.text()
+        do_start_address = self.ui.lineEdit_do_01_address.text()
+        try:
+            assert isinstance(int(di_start_address, 16), int), 'Некорректный адрес DI 1'
+            assert isinstance(int(do_start_address, 16), int), 'Некорректный адрес DO 1'
+        except AssertionError:
+            MainWindow.show_msg('Некорректные параметры DI и DO', 'Error')
+        except Exception as e:
+            log.exception(e)
+            self.client.close()
+            MainWindow.show_msg(e)
+        else:
+            self.send_to_statusbar(f'Адрес DI 1 - {di_start_address}\nАдрес DO 1 - {do_start_address}')
+            self.di_start_address = int(di_start_address, 16)
+            self.do_start_address = int(do_start_address, 16)
 
     def get_voice(self):
         """ Возвращает текущий тип голоса озвучивания"""
@@ -213,7 +243,6 @@ class MainWindow(QtWidgets.QMainWindow):
             print(self.client)
             if self.client is not None:
                 self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
-                self.check_ied_params()  # проверка параметров устройства
                 self.show_dio_buttons()  # отображение актуального числа di и do
                 self.change_buttons_style(True)  # активация/деактивация кнопок управления
                 pygame.init()  # инициализация медиапроигрывателя
@@ -243,7 +272,6 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.exception(e)
             MainWindow.show_msg(e)
-            self.client.close()
         else:
             self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
             return client
@@ -252,7 +280,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Проверка параметров подключенного устройства"""
         self.send_to_statusbar(f'Проверка параметров устройства {self.ied_type}...')
         self.get_max_dio()
-        self.get_dio_01_address()
+        # self.get_start_addresses()
 
     def get_max_dio(self):
         """Определяет количество DI и DO в подключенном устройстве"""
@@ -283,24 +311,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.spinBox_do_count.setValue(self.max_do)
             msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
             self.send_to_statusbar(msg)
-
-    def get_dio_01_address(self):
-        """Определяет адреса DI_1 и DO_1 подключенного устройства"""
-        di_01_address = self.ui.lineEdit_di_01_address.text()
-        do_01_address = self.ui.lineEdit_do_01_address.text()
-        try:
-            assert isinstance(int(di_01_address, 16), int), 'Некорректный адрес DI 1'
-            assert isinstance(int(do_01_address, 16), int), 'Некорректный адрес DO 1'
-        except AssertionError:
-            MainWindow.show_msg('Некорректные параметры DI и DO', 'Error')
-        except Exception as e:
-            log.exception(e)
-            self.client.close()
-            MainWindow.show_msg(e)
-        else:
-            self.send_to_statusbar(f'Адрес DI 1 - {di_01_address}\nАдрес DO 1 - {do_01_address}')
-            self.di_start_address = int(di_01_address, 16)
-            self.do_start_address = int(do_01_address, 16)
 
     def show_dio_buttons(self):
         """Отображение актуального числа DI и DO"""
