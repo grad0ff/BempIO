@@ -67,15 +67,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # Инициализация параметров на вкладке "Параметры устройства"
         self.ui.tabWidget.setTabText(1, 'Устройство')
         self.ui.comboBox_ied_type.addItems(['БЭМП', 'Другое'])
+        self.ui.comboBox_ied_type.setDisabled(True)
         self.ied_type = None
         self.get_ied()  # получить тип устройства
         self.ui.lineEdit_di_01_address.setPlaceholderText('hex')
         self.ui.lineEdit_do_01_address.setPlaceholderText('hex')
-
         self.di_start_address = None
         self.do_start_address = None
         self.get_start_addresses()
-        self.max_di = self.max_do = 96
+        self.max_di = self.max_do = self.all_dio = 96
         self.ui.spinBox_ied_address.setRange(1, 247)
         self.ui.spinBox_di_count.setRange(1, self.max_di)
         self.ui.spinBox_do_count.setRange(1, self.max_do)
@@ -101,7 +101,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.comboBox_voice_type.activated.connect(self.get_voice)  # выбрать голос из выпадающего списка
         self.ui.pushButton_do_control.clicked.connect(self.do_control)  # включить режим управления реле
 
+        # Служебные данные
         self.client = None
+        self.active_di_buttons_list = None
+        self.active_do_list = None
+
+        # Служебные функции
+        self.all_di_buttons = self.get_dio_buttons_list(self.ui.groupBox_di)
+        self.all_do_buttons = self.get_dio_buttons_list(self.ui.groupBox_do)
+
         # Тест фичи
         # self.ui.pushButton_searh_ports.clicked.connect(self.test)
 
@@ -114,7 +122,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if msg_type == 'Error':
             msg_icon = QMessageBox.Critical
             window_icon = QIcon(app_service.resource_path('static/images/critical.ico'))
-        if msg_type == 'Info':
+        elif msg_type == 'Info':
             msg_icon = QMessageBox.Information
             window_icon = QIcon(app_service.resource_path('static/images/information.ico'))
         elif msg_type == 'Warning':
@@ -126,17 +134,6 @@ class MainWindow(QtWidgets.QMainWindow):
         msg_box.setText(msg)
         msg_box.exec_()
 
-    @staticmethod
-    def show_ied_dio(group_dio, max_dio):
-        """Отображает актуальное количество дискретных входов и выходов"""
-        dio_buttons_list = []
-        for dio in group_dio.findChildren(QtWidgets.QPushButton):
-            dio_buttons_list.append(dio)
-        dio_buttons_list.sort(key=lambda x: int(x.text()))
-        for dio in dio_buttons_list[max_dio:96]:
-            dio.setVisible(False)
-        return dio_buttons_list[:max_dio]
-
     def test(self):
         """Тестирование фичей"""
         print('Запуск теста... ')
@@ -145,6 +142,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.exception(e)
 
+    # НАСТРОЙКА ПАРАМЕТРОВ УСТРОЙСТВА
     def get_port(self):
         """Выбор COM-порта из выпадающего списка"""
         self.port = self.ui.comboBox_com_port.currentText()
@@ -207,6 +205,60 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.ied_type == 'Другое':
             change_ied_params(False, '', '')
 
+    def get_voice(self):
+        """ Возвращает текущий тип голоса озвучивания"""
+        self.voice_type = self.ui.comboBox_voice_type.currentText()
+
+    def do_control(self):
+        if self.ui.pushButton_do_control.text() == '':
+            DOButton.DO_CONTROL = True
+        else:
+            DOButton.DO_CONTROL = True
+
+    # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
+    def connect_manger(self):
+        """Менеджер подключения."""
+        if self.client is None:
+            print('запущен connect_manger')
+            self.client = self.connecting()  # получить клиент подключения
+            if self.client is not None:
+                self.get_start_addresses()  # задать начальные адреса DI и DO
+                self.get_max_dio()  # задать данные по количеству DI и DO
+
+                self.show_active_dio()  # показать имеющеся в устройстве DI и DO
+                self.change_buttons_style(True)  # активация/деактивация кнопок управления
+                pygame.init()  # инициализация медиапроигрывателя
+                self.run_threads()
+                self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
+        else:
+            print('disconnecting')
+            self.disconnecting()
+
+    def connecting(self):
+        """Проверяет связь с устройством, возвращает клиент"""
+        self.send_to_statusbar(f'Проверка связи с {self.ied_type}...')
+        try:
+            client = ModbusSerialClient(
+                method='ASCII',
+                port=self.port,
+                baudrate=self.speed,
+                bytesize=8,
+                parity=self.parity,
+                stopbits=self.stopbits)
+            if client.connect() and client.is_socket_open():
+                return client
+            else:
+                MainWindow.show_msg('Неправильные параметры подключения или COM-порт занят!', 'Warning')
+            # 'Ошибка подключения к устройству'
+            # num1 = str(client.read_holding_registers(0x010C, unit=self.address).registers[0])
+            # num2 = str(client.read_holding_registers(0x010D, unit=self.address).registers[0])
+            # assert num1.isdigit() and num1.isdigit() and 5 < len(num1 + num2) < 9
+        except Exception as e:
+            log.exception(e)
+            MainWindow.show_msg(e)
+        # else:
+        # self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
+
     def get_start_addresses(self):
         """Определяет адреса DI_1 и DO_1 подключенного устройства"""
         di_start_address = self.ui.lineEdit_di_01_address.text()
@@ -225,65 +277,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.di_start_address = int(di_start_address, 16)
             self.do_start_address = int(do_start_address, 16)
 
-    def get_voice(self):
-        """ Возвращает текущий тип голоса озвучивания"""
-        self.voice_type = self.ui.comboBox_voice_type.currentText()
-
-    def do_control(self):
-        if self.ui.pushButton_do_control.text() == '':
-            DOButton.DO_CONTROL = True
-        else:
-            DOButton.DO_CONTROL = True
-
-    def connect_manger(self):
-        """Менеджер подключения."""
-        if self.client is None:
-            print('connecting')
-            self.client = self.connecting()
-            print(self.client)
-            if self.client is not None:
-                self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
-                self.show_dio_buttons()  # отображение актуального числа di и do
-                self.change_buttons_style(True)  # активация/деактивация кнопок управления
-                pygame.init()  # инициализация медиапроигрывателя
-                self.run_threads()
-        else:
-            print('disconnecting')
-            self.disconnecting()
-
-    def connecting(self):
-        """Проверяет связь с устройством, возвращает клиент"""
-        self.send_to_statusbar(f'Проверка связи с {self.ied_type}...')
-        try:
-            client = ModbusSerialClient(
-                method='ASCII',
-                port=self.port,
-                baudrate=self.speed,
-                bytesize=8,
-                parity=self.parity,
-                stopbits=self.stopbits)
-            assert client.connect(), 'Ошибка соединения с устройством'
-            assert client.is_socket_open(), 'Ошибка открытия порта'
-            num1 = str(client.read_holding_registers(0x010C, unit=self.address).registers[0])
-            num2 = str(client.read_holding_registers(0x010D, unit=self.address).registers[0])
-            # assert num1.isdigit() and num1.isdigit() and 5 < len(num1 + num2) < 9
-        except ModbusIOException:
-            MainWindow.show_msg('Неправильные параметры подключения или COM-порт занят!', 'Warning')
-        except Exception as e:
-            log.exception(e)
-            MainWindow.show_msg(e)
-        else:
-            self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
-            return client
-
-    def check_ied_params(self):
-        """Проверка параметров подключенного устройства"""
-        self.send_to_statusbar(f'Проверка параметров устройства {self.ied_type}...')
-        self.get_max_dio()
-        # self.get_start_addresses()
-
     def get_max_dio(self):
         """Определяет количество DI и DO в подключенном устройстве"""
+        self.send_to_statusbar(f'Проверка параметров устройства {self.ied_type}...')
         try:
             if self.ied_type == 'БЭМП':
                 try:
@@ -293,9 +289,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     log.exception(e)
                     msg = 'Ошибка чтения количества DI и DO БЭМП'
                     MainWindow.show_msg(msg, 'Error')
-            # elif self.ied_type == 'Другое':
-            #     self.max_di = int(self.ui.spinBox_di_count.text())
-            #     self.max_do = int(self.ui.spinBox_di_count.text())
+            elif self.ied_type == 'Другое':
+                self.max_di = int(self.ui.spinBox_di_count.text())
+                self.max_do = int(self.ui.spinBox_di_count.text())
             assert isinstance(self.max_di, int), 'Неправильный адрес DI 1'
             assert isinstance(self.max_do, int), 'Неправильный адрес DO 1'
         except AssertionError:
@@ -312,11 +308,20 @@ class MainWindow(QtWidgets.QMainWindow):
             msg = f"Количество DI - {self.max_di}\nКоличество DO - {self.max_do}"
             self.send_to_statusbar(msg)
 
-    def show_dio_buttons(self):
-        """Отображение актуального числа DI и DO"""
+    def show_active_dio(self):
+        """Отображает имеющеся в устройстве DI и DO"""
 
-        self.di_list = MainWindow.show_ied_dio(self.ui.groupBox_di, self.max_di)
-        self.do_list = MainWindow.show_ied_dio(self.ui.groupBox_do, self.max_do)
+        def get_active_dio(all_dio_buttons, max_dio, all_dio):
+            try:
+                for dio in all_dio_buttons[max_dio:all_dio]:
+                    dio.setVisible(False)
+            except Exception as e:
+                log.exception(e)
+            else:
+                return all_dio_buttons[:max_dio]
+
+        self.active_di_buttons_list = get_active_dio(self.all_di_buttons, self.max_di, self.all_dio)
+        self.active_do_list = get_active_dio(self.all_do_buttons, self.max_do, self.all_dio)
 
     def run_threads(self):
         """Инициализация потока опроса  DI и DO"""
@@ -391,8 +396,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         while getattr(self.th_polling_dio, 'run_flag', True):
             time.sleep(self.polling_time)
-            self.processing(self.di_start_address, self.max_di, self.di_list)
-            self.processing(self.do_start_address, self.max_do, self.do_list)
+            self.processing(self.di_start_address, self.max_di, self.active_di_buttons_list)
+            self.processing(self.do_start_address, self.max_do, self.active_do_list)
 
     def processing(self, dio_address, max_dio, dio_buttons_list):
         """Вспомогательная функция опроса DI и DO"""
@@ -504,10 +509,23 @@ class MainWindow(QtWidgets.QMainWindow):
         msg = 'Закрытие программы'
         self.send_to_statusbar(msg)
 
+    # СЛУЖЕБНЫЕ ФУНКЦИИ
     def send_to_statusbar(self, msg):
         """Вывод сообщения в консоль и статус-бар"""
         print(msg)
         self.statusBar().showMessage(msg)
+
+    @staticmethod
+    def get_dio_buttons_list(group_dio):
+        dio_buttons_list = []
+        try:
+            for dio in group_dio.findChildren(QtWidgets.QPushButton):
+                dio_buttons_list.append(dio)
+            dio_buttons_list.sort(key=lambda num: int(num.text()))
+        except Exception as e:
+            log.exception(e)
+        else:
+            return dio_buttons_list
 
 
 if __name__ == "__main__":
