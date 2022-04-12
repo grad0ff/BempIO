@@ -39,7 +39,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.polling_time = 0
 
         # Инициализация параметров кнопки подключения
-        self.ui.pushButton_connect.set_style()
+        self.ui.pushButton_connect.change_style()
         self.ui.pushButton_connect.setFocus()  # задать фокус на кнопку
 
         # Инициализация параметров на вкладке "Параметры подключения"
@@ -348,7 +348,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.groupBox_do_control.setEnabled(a0)
         self.ui.groupBox_di.setEnabled(a0)
         self.ui.groupBox_do.setEnabled(a0)
-        self.ui.pushButton_connect.set_style(a0)
+        self.ui.pushButton_connect.change_state()
 
         self.ui.pushButton_do_control.setEnabled(False)
         self.ui.comboBox_voice_type.setEnabled(False)

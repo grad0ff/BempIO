@@ -20,15 +20,16 @@ class MyButton(QPushButton):
         return self.__pressed
 
     def change_state(self):
+        def change
         try:
             if self.is_pressed():
                 # если кнопка нажата
                 self.setChecked(False)
-                self.set_style(False)
+                self.change_style(False)
                 self.__pressed = False
             else:
                 self.setChecked(True)
-                self.set_style(True)
+                self.change_style(True)
                 self.__pressed = True
         except Exception:
             print(Exception)
@@ -42,26 +43,26 @@ class ConnectButton(MyButton):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.__ied_is_connected = False
+        # self.__ied_is_connected = False
 
     # НАЖАТИЕ НА КНОПКУ
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        # print(f'\n\tmousePressEvent {self} \n')
-        # self.change_state()
-        if self.is_pressed() and self.__ied_is_connected:
-            # если кнопка нажата
-            self.setChecked(False)
-            self.set_style(False)
-            self.__pressed = False
-        else:
-            self.setChecked(True)
-            self.set_style(True)
-            self.__pressed = True
+    # def mousePressEvent(self, event):
+    #     super().mousePressEvent(event)
+    #     # print(f'\n\tmousePressEvent {self} \n')
+    #     # self.change_state()
+    #     if self.is_pressed() and self.__ied_is_connected:
+    #         # если кнопка нажата
+    #         self.setChecked(False)
+    #         self.set_style(False)
+    #         self.__pressed = False
+    #     else:
+    #         self.setChecked(True)
+    #         self.set_style(True)
+    #         self.__pressed = True
 
-    def set_style(self, is_pressed=False):
-        """Меняет внешний вид и текст кнопки подключения"""
-        if is_pressed:
+    def change_style(self, is_pressed=False):
+        """ Меняет внешний вид и текст кнопки подключения """
+        if self.is_pressed():
             self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
             # self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
             self.setText('ОТКЛЮЧИТЬ')
