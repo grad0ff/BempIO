@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtGui import QFont, QIcon
+from qasync import QtGui
 
 import app_service
 
@@ -19,31 +20,35 @@ class MyButton(QPushButton):
     def is_pressed(self):
         return self.__pressed
 
-    def change_state(self):
-        def change
-        try:
-            if self.is_pressed():
-                # если кнопка нажата
-                self.setChecked(False)
-                self.change_style(False)
-                self.__pressed = False
-            else:
-                self.setChecked(True)
-                self.change_style(True)
-                self.__pressed = True
-        except Exception:
-            print(Exception)
+    def set_pressed(self):
+        self.__pressed = True
 
-    def set_style(self, is_pressed: bool):
+    def set_released(self):
+        self.__pressed = False
+
+    def mousePressEvent(self, e: QtGui.QMouseEvent):
+        """ Меняет состояние кнопки при нажатии """
+        super(MyButton, self).mousePressEvent(e)
+        try:
+            if not self.is_pressed():
+                self.set_pressed()
+            else:
+                self.__pressed = False
+            self.change_style()
+        except Exception as e:
+            print(e)
+
+    def change_style(self):
+        """ Меняет внешний вид и текст кнопки """
         pass
 
 
 class ConnectButton(MyButton):
     """ Класс кнопки подключения к устройству"""
 
-    def __init__(self, *args):
-        super().__init__(*args)
-        # self.__ied_is_connected = False
+    # def __init__(self, *args):
+    #     super().__init__(*args)
+    # self.__ied_is_connected = False
 
     # НАЖАТИЕ НА КНОПКУ
     # def mousePressEvent(self, event):
@@ -60,15 +65,15 @@ class ConnectButton(MyButton):
     #         self.set_style(True)
     #         self.__pressed = True
 
-    def change_style(self, is_pressed=False):
-        """ Меняет внешний вид и текст кнопки подключения """
+    def change_style(self):
+        """ Меняет внешний вид и текст кнопки подключения"""
         if self.is_pressed():
             self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
-            # self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
+            self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
             self.setText('ОТКЛЮЧИТЬ')
         else:
             self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
-            # self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
+            self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
             self.setText('ПОДКЛЮЧИТЬ')
         self.setIconSize(QSize(50, 50))
 
@@ -108,14 +113,14 @@ class DI0Button(MyButton):
     def is_clickable(self):
         return self.__class__._CLICKABLE_FLAG
 
-    def set_button_num(self, num):
+    def set_num(self, num):
         self.num = num
 
-    def set_triggered(self, val: bool):
-        self._is_triggered = val
+    # def set_triggered(self, val: bool):
+    #     self.set_pressed()
 
-    def is_triggered(self):
-        return self._is_triggered
+    # def is_triggered(self):
+    #     return self._is_triggered
 
     def set_style(self, state):
         if state == 'default':

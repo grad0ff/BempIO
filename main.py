@@ -104,7 +104,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Служебные данные
         self.client = None
         self.active_di_buttons_list = None
-        self.active_do_list = None
+        self.active_do_buttons_list = None
+        self.th_polling_dio = None
 
         # Служебные функции
         self.all_di_buttons = self.get_dio_buttons_list(self.ui.groupBox_di)
@@ -217,22 +218,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connect_manger(self):
-        """Менеджер подключения."""
+        """ Менеджер подключений """
         if self.client is None:
             print('запущен connect_manger')
             self.client = self.connecting()  # получить клиент подключения
             if self.client is not None:
                 self.get_start_addresses()  # задать начальные адреса DI и DO
                 self.get_max_dio()  # задать данные по количеству DI и DO
-
-                self.show_active_dio()  # показать имеющеся в устройстве DI и DO
-                self.change_buttons_style(True)  # активация/деактивация кнопок управления
+                self.show_active_dio()  # показать имеющиеся в устройстве DI и DO
+                self.change_buttons_style(True)  # изменить внешний вид кнопок
                 pygame.init()  # инициализация медиапроигрывателя
                 self.run_threads()
                 self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
         else:
             print('disconnecting')
-            self.disconnecting()
+            self.client = self.disconnecting()
 
     def connecting(self):
         """Проверяет связь с устройством, возвращает клиент"""
@@ -260,7 +260,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.send_to_statusbar(f'Связь c {self.ied_type} установлена')
 
     def get_start_addresses(self):
-        """Определяет адреса DI_1 и DO_1 подключенного устройства"""
+        """ Определяет адреса DI_1 и DO_1 подключенного устройства """
         di_start_address = self.ui.lineEdit_di_01_address.text()
         do_start_address = self.ui.lineEdit_do_01_address.text()
         try:
@@ -321,43 +321,36 @@ class MainWindow(QtWidgets.QMainWindow):
                 return all_dio_buttons[:max_dio]
 
         self.active_di_buttons_list = get_active_dio(self.all_di_buttons, self.max_di, self.all_dio)
-        self.active_do_list = get_active_dio(self.all_do_buttons, self.max_do, self.all_dio)
+        self.active_do_buttons_list = get_active_dio(self.all_do_buttons, self.max_do, self.all_dio)
+
+    def change_buttons_style(self, flag: bool):
+        """ Изменение вида кнопок настроек при подключении/отключении """
+        self.ui.tab1_connect_settings.setDisabled(flag)  # деактивация вкладки с настройками подключения
+        self.ui.tab2_dio_settings.setDisabled(flag)  # деактивация вкладки с настройками устройства
+        # self.ui.tab3_functions.setEnabled(flag)  # активация вкладки с дополнительными функциями
+        self.ui.groupBox_voicing_settings.setEnabled(flag)
+        self.ui.groupBox_do_control.setEnabled(flag)
+        self.ui.groupBox_di.setEnabled(flag)  # активация окна с DI
+        self.ui.groupBox_do.setEnabled(flag)  # активация окна с DO
+
+        self.ui.pushButton_do_control.setEnabled(False)
+        self.ui.comboBox_voice_type.setEnabled(False)
 
     def run_threads(self):
-        """Инициализация потока опроса  DI и DO"""
-
+        """ Запускает поток опроса DI и DO """
         self.th_polling_dio = threading.Thread(target=self.polling_dio, name='th_polling_dio')
         self.th_polling_dio.run_flag = True
         try:
             self.th_polling_dio.start()
         except Exception as e:
             log.exception(e)
-            msg = "Ошибка запуска опроса DI и DO"
-            self.send_to_statusbar(msg)
-            MainWindow.show_msg(e)
+            MainWindow.show_msg('Ошибка запуска опроса DI и DO')
         else:
-            msg = "Запущен опрос DI и DO."
-            self.send_to_statusbar(msg)
-
-    def change_buttons_style(self, a0: bool):
-        """Изменение вида кнопок настроек при подключении/отключении"""
-
-        self.ui.tab2_dio_settings.setDisabled(a0)
-        self.ui.tab1_connect_settings.setDisabled(a0)
-        self.ui.groupBox_voicing_settings.setEnabled(a0)
-        self.ui.groupBox_do_control.setEnabled(a0)
-        self.ui.groupBox_di.setEnabled(a0)
-        self.ui.groupBox_do.setEnabled(a0)
-        self.ui.pushButton_connect.change_state()
-
-        self.ui.pushButton_do_control.setEnabled(False)
-        self.ui.comboBox_voice_type.setEnabled(False)
+            self.send_to_statusbar('Запущен опрос DI и DO')
 
     def disconnecting(self):
-        """Отключение от устройства"""
-
-        msg = "Отключение от устройства..."
-        self.send_to_statusbar(msg)
+        """ Отключение от устройства """
+        self.send_to_statusbar('Отключение от устройства...')
         self.ui.radioButton_voicing_off.setChecked(True)
         try:
             if self.th_polling_dio.is_alive():
@@ -380,7 +373,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.client.close()
             pygame.quit()
         finally:
-            self.client = None
+
+            client = None
+            return client
 
     def unselect_dio(self, group_dio):
         """отображение ранее скрытых DI и DO"""
@@ -392,31 +387,32 @@ class MainWindow(QtWidgets.QMainWindow):
             dio.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     def polling_dio(self):
-        """Опрос DI и DO"""
+        """ Опрос DI и DO """
 
         while getattr(self.th_polling_dio, 'run_flag', True):
-            time.sleep(self.polling_time)
             self.processing(self.di_start_address, self.max_di, self.active_di_buttons_list)
-            self.processing(self.do_start_address, self.max_do, self.active_do_list)
+            self.processing(self.do_start_address, self.max_do, self.active_do_buttons_list)
+            time.sleep(self.polling_time)
 
     def processing(self, dio_address, max_dio, dio_buttons_list):
-        """Вспомогательная функция опроса DI и DO"""
-
+        """ Вспомогательная функция опроса DI и DO """
         dio_list = self.get_request(dio_address, max_dio)  # получить список DI или DO
+
         try:
-            for i in range(max_dio):  # для отображаемого кол-ва DI или DO
-                dio_button = dio_buttons_list[i]
-                dio_button.set_button_num(i + 1)  # задает № отдельного DI или DO
-                # изменение статуса DIO
-                if dio_list[i]:  # если DIO сработал
-                    dio_button.set_triggered(True)
-                else:  # если DIO отключился
-                    dio_button.set_triggered(False)
+            for dio in range(max_dio):  # для актуального количества ва DI или DO
+                dio_button = dio_buttons_list[dio]
+                dio_button.set_num(dio + 1)  # задает № отдельного DI или DO
+                if dio_list[dio]:
+                    # если DIO сработал
+                    dio_button.set_pressed()
+                else:
+                    # если DIO отключился
+                    dio_button.set_released()
                 self.check_clickable(
                     dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
                 self.check_style(dio_button)
                 self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
-                if dio_button.is_triggered():
+                if dio_button.is_pressed():
                     dio_button.add_to_triggered_dio_list(dio_button.num)
                 elif dio_button.num in dio_button.get_triggered_list():
                     dio_button.del_from_triggered_dio_list(dio_button.num)
@@ -425,17 +421,12 @@ class MainWindow(QtWidgets.QMainWindow):
             log.exception(e)
 
     def get_request(self, dio_address, max_dio):
-        """Отправка запроса в устройство"""
-
+        """ Отправляет запрос в устройство и возвращает список с булевыми значениями состояний DI и DO """
         try:
             dio_list = self.client.read_coils(dio_address, max_dio, unit=self.address).bits  # считывание регистров
-        except (AttributeError, ConnectionException):
-            # QTimer.singleShot(0, self.ui.pushButton_connect.click)
-            sys.exit()
         except Exception as e:
             log.exception(e)
-            msg = "Ошибка опроса DI и DO"
-            MainWindow.show_msg(msg)
+            MainWindow.show_msg('Ошибка опроса DI и DO')
         else:
             return dio_list
 
@@ -457,7 +448,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def check_style(self, dio_button):
 
-        if dio_button.is_triggered():
+        if dio_button.is_pressed():
             if dio_button.isChecked():  # если нажата кнопка DIO, то при срабатывании
                 if isinstance(dio_button, DOButton) and DOButton.DO_CONTROL:
                     dio_button.set_style('controlled')
@@ -473,22 +464,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if dio_button.is_clickable():
             if dio_button.isChecked() or not dio_button.get_pressed_flag():
-                if (dio_button.is_triggered() and dio_button.num not in dio_button.get_triggered_list()) or \
-                        (not dio_button.is_triggered() and dio_button.num in dio_button.get_triggered_list()):
+                if (dio_button.is_pressed() and dio_button.num not in dio_button.get_triggered_list()) or \
+                        (not dio_button.is_pressed() and dio_button.num in dio_button.get_triggered_list()):
                     self.voicing(dio_button, )
 
     def voicing(self, dio_button):
         """Озвучивание DI и DO"""
 
         try:
-            if dio_button.is_triggered() or (not dio_button.is_triggered() and self.ui.VoiceCtrlCheckBox.isChecked()):
+            if dio_button.is_pressed() or (not dio_button.is_pressed() and self.ui.VoiceCtrlCheckBox.isChecked()):
                 song_dio_type = pygame.mixer.Sound(
                     app_service.resource_path(
                         f'static/voicing/{self.voice_type}/{dio_button.type}/{dio_button.num}.wav'))
                 song_time = song_dio_type.get_length() - 0.3
                 song_dio_type.play()
                 time.sleep(song_time)
-                if not dio_button.is_triggered():
+                if not dio_button.is_pressed():
                     song_dio_state = pygame.mixer.Sound(
                         app_service.resource_path(f'static/voicing/{self.voice_type}/on-off/отключено.wav'))
                     song_time = song_dio_state.get_length() - 0.1
