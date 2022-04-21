@@ -219,22 +219,25 @@ class MainWindow(QtWidgets.QMainWindow):
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
     def connect_manger(self):
         """ Менеджер подключений """
-        if self.client is None:
-            print('запущен connect_manger')
-            self.client = self.connecting()  # получить клиент подключения
-            if self.client is not None:
-                self.get_start_addresses()  # задать начальные адреса DI и DO
-                self.get_max_dio()  # задать данные по количеству DI и DO
-                self.show_active_dio()  # показать имеющиеся в устройстве DI и DO
-                self.change_buttons_style(True)  # изменить внешний вид кнопок
-                pygame.init()  # инициализация медиапроигрывателя
-                self.run_threads()
-                self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
-        else:
-            print('disconnecting')
-            self.client = self.disconnecting()
+        print('Запущен connect_manger')
+        try:
+            if self.client is None:
+                self.client = self.get_client()  # получить клиент подключения
+                if self.client is not None:
+                    self.get_start_addresses()  # задать начальные адреса DI и DO
+                    self.get_max_dio()  # задать данные по количеству DI и DO
+                    self.show_active_dio()  # показать имеющиеся в устройстве DI и DO
+                    self.change_buttons_style(True)  # изменить внешний вид кнопок
+                    pygame.init()  # инициализация медиапроигрывателя
+                    self.run_threads()
+                    self.send_to_statusbar(f'Устройство {self.ied_type} подключено')
+            else:
+                self.disconnecting()
+        except Exception as e:
+            log.exception(e)
+            MainWindow.show_msg(e)
 
-    def connecting(self):
+    def get_client(self) -> ModbusSerialClient:
         """Проверяет связь с устройством, возвращает клиент"""
         self.send_to_statusbar(f'Проверка связи с {self.ied_type}...')
         try:
@@ -246,6 +249,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 parity=self.parity,
                 stopbits=self.stopbits)
             if client.connect() and client.is_socket_open():
+                # os_vesion = client.read_holding_registers(0x0106, unit=self.address).registers[0]
+                # assert os_vesion == 121, 'Устройство не является БЭМП'
                 return client
             else:
                 MainWindow.show_msg('Неправильные параметры подключения или COM-порт занят!', 'Warning')
@@ -325,13 +330,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def change_buttons_style(self, flag: bool):
         """ Изменение вида кнопок настроек при подключении/отключении """
+        self.ui.pushButton_connect.change_style()
+        self.ui.groupBox_di.setEnabled(flag)  # активация окна с DI
+        self.ui.groupBox_do.setEnabled(flag)  # активация окна с DO
         self.ui.tab1_connect_settings.setDisabled(flag)  # деактивация вкладки с настройками подключения
         self.ui.tab2_dio_settings.setDisabled(flag)  # деактивация вкладки с настройками устройства
         # self.ui.tab3_functions.setEnabled(flag)  # активация вкладки с дополнительными функциями
         self.ui.groupBox_voicing_settings.setEnabled(flag)
         self.ui.groupBox_do_control.setEnabled(flag)
-        self.ui.groupBox_di.setEnabled(flag)  # активация окна с DI
-        self.ui.groupBox_do.setEnabled(flag)  # активация окна с DO
 
         self.ui.pushButton_do_control.setEnabled(False)
         self.ui.comboBox_voice_type.setEnabled(False)
@@ -348,8 +354,8 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.send_to_statusbar('Запущен опрос DI и DO')
 
-    def disconnecting(self):
-        """ Отключение от устройства """
+    def disconnecting(self) -> None:
+        """ Отключает от устройства """
         self.send_to_statusbar('Отключение от устройства...')
         self.ui.radioButton_voicing_off.setChecked(True)
         try:
@@ -364,6 +370,7 @@ class MainWindow(QtWidgets.QMainWindow):
             msg = "Ошибка отключения от устройства"
             MainWindow.show_msg(msg)
         else:
+            pygame.quit()
             msg = f"Устройство {self.ied_type} отключено!"
             self.send_to_statusbar(msg)
             self.get_ied()
@@ -371,11 +378,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.unselect_dio(self.ui.groupBox_di)
             self.unselect_dio(self.ui.groupBox_do)
             self.client.close()
-            pygame.quit()
         finally:
-
-            client = None
-            return client
+            self.client = None
 
     def unselect_dio(self, group_dio):
         """отображение ранее скрытых DI и DO"""
@@ -387,7 +391,7 @@ class MainWindow(QtWidgets.QMainWindow):
             dio.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     def polling_dio(self):
-        """ Опрос DI и DO """
+        """ Опрашивает DI и DO в отдельном потоке """
 
         while getattr(self.th_polling_dio, 'run_flag', True):
             self.processing(self.di_start_address, self.max_di, self.active_di_buttons_list)

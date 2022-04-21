@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtGui import QFont, QIcon
-from qasync import QtGui
+from PyQt5 import QtGui
 
 import app_service
 
@@ -14,7 +14,7 @@ class MyButton(QPushButton):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.setCheckable(True)
+        # self.setCheckable(True)
         self.__pressed = False
 
     def is_pressed(self):
@@ -33,8 +33,7 @@ class MyButton(QPushButton):
             if not self.is_pressed():
                 self.set_pressed()
             else:
-                self.__pressed = False
-            self.change_style()
+                self.set_released()
         except Exception as e:
             print(e)
 
@@ -69,11 +68,11 @@ class ConnectButton(MyButton):
         """ Меняет внешний вид и текст кнопки подключения"""
         if self.is_pressed():
             self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
-            self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
+            # self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
             self.setText('ОТКЛЮЧИТЬ')
         else:
             self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
-            self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
+            # self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
             self.setText('ПОДКЛЮЧИТЬ')
         self.setIconSize(QSize(50, 50))
 
