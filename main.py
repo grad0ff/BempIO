@@ -87,7 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.get_voice()  # получить тип голоса
 
         # Обработка событий
-        self.ui.pushButton_connect.clicked.connect(self.connect_manger)  # подключиться к устройству
+        self.ui.pushButton_connect.clicked.connect(self.connect_manager)  # подключиться к устройству
         self.ui.comboBox_com_port.activated.connect(self.get_port)  # выбрать COM-порт из выпадающего списка
         self.ui.pushButton_searh_ports.clicked.connect(self.find_ports)  # найти активные COM-порты
         self.ui.comboBox_speed.activated.connect(self.get_speed)  # выбрать скорость из выпадающего списка
@@ -106,6 +106,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.active_di_buttons_list = None
         self.active_do_buttons_list = None
         self.th_polling_dio = None
+        self.connect_agent = ModbusSerialClient
 
         # Служебные функции
         self.all_di_buttons = self.get_dio_buttons_list(self.ui.groupBox_di)
@@ -115,7 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.ui.pushButton_searh_ports.clicked.connect(self.test)
 
     @staticmethod
-    def show_msg(msg, msg_type='Error'):
+    def show_msg(msg, msg_type):
         """Выводит всплывающее окно с сообщением """
         window_icon = None
         msg_icon = None
@@ -217,15 +218,15 @@ class MainWindow(QtWidgets.QMainWindow):
             DOButton.DO_CONTROL = True
 
     # ПОДКЛЮЧЕНИЕ К УСТРОЙСТВУ
-    def connect_manger(self):
+    def connect_manager(self):
         """ Менеджер подключений """
-        print('Запущен connect_manger')
+        print('Запущен connect_manager')
         try:
             if self.client is None:
                 self.client = self.get_client()  # получить клиент подключения
-                if self.client is not None:
+                if isinstance(self.client, ModbusSerialClient):
                     self.get_start_addresses()  # задать начальные адреса DI и DO
-                    self.get_max_dio()  # задать данные по количеству DI и DO
+                    self.get_dio_count()  # задать данные по количеству DI и DO
                     self.show_active_dio()  # показать имеющиеся в устройстве DI и DO
                     self.change_buttons_style(True)  # изменить внешний вид кнопок
                     pygame.init()  # инициализация медиапроигрывателя
@@ -234,14 +235,14 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.disconnecting()
         except Exception as e:
-            log.exception(e)
             MainWindow.show_msg(e)
+            log.exception(e)
 
     def get_client(self) -> ModbusSerialClient:
-        """Проверяет связь с устройством, возвращает клиент"""
+        """ Проверяет связь с устройством, возвращает клиент """
         self.send_to_statusbar(f'Проверка связи с {self.ied_type}...')
         try:
-            client = ModbusSerialClient(
+            client = self.connect_agent(
                 method='ASCII',
                 port=self.port,
                 baudrate=self.speed,
@@ -274,38 +275,35 @@ class MainWindow(QtWidgets.QMainWindow):
         except AssertionError:
             MainWindow.show_msg('Некорректные параметры DI и DO', 'Error')
         except Exception as e:
+            MainWindow.show_msg(e)
             log.exception(e)
             self.client.close()
-            MainWindow.show_msg(e)
         else:
             self.send_to_statusbar(f'Адрес DI 1 - {di_start_address}\nАдрес DO 1 - {do_start_address}')
             self.di_start_address = int(di_start_address, 16)
             self.do_start_address = int(do_start_address, 16)
 
-    def get_max_dio(self):
-        """Определяет количество DI и DO в подключенном устройстве"""
+    def get_dio_count(self):
+        """Определяет количество DI и DO в подключенном устройстве """
         self.send_to_statusbar(f'Проверка параметров устройства {self.ied_type}...')
+        if self.ied_type == 'БЭМП':
+            try:
+                self.max_di = self.client.read_holding_registers(0x0100, unit=self.address).registers[0]
+                self.max_do = self.client.read_holding_registers(0x0101, unit=self.address).registers[0]
+            except Exception as e:
+                MainWindow.show_msg('Ошибка чтения количества DI и DO БЭМП', 'Error')
+                log.exception(e)
+        elif self.ied_type == 'Другое':
+            self.max_di = int(self.ui.spinBox_di_count.text())
+            self.max_do = int(self.ui.spinBox_di_count.text())
         try:
-            if self.ied_type == 'БЭМП':
-                try:
-                    self.max_di = self.client.read_holding_registers(0x0100, unit=self.address).registers[0]
-                    self.max_do = self.client.read_holding_registers(0x0101, unit=self.address).registers[0]
-                except Exception as e:
-                    log.exception(e)
-                    msg = 'Ошибка чтения количества DI и DO БЭМП'
-                    MainWindow.show_msg(msg, 'Error')
-            elif self.ied_type == 'Другое':
-                self.max_di = int(self.ui.spinBox_di_count.text())
-                self.max_do = int(self.ui.spinBox_di_count.text())
             assert isinstance(self.max_di, int), 'Неправильный адрес DI 1'
             assert isinstance(self.max_do, int), 'Неправильный адрес DO 1'
         except AssertionError:
-            msg = "Некорректные параметры DI и DO."
-            MainWindow.show_msg(msg, 'Error')
-            self.send_to_statusbar(msg)
+            MainWindow.show_msg('Некорректные параметры DI и DO.', 'Error')
         except Exception as e:
-            log.exception(e)
             MainWindow.show_msg(e)
+            log.exception(e)
             self.client.close()
         else:
             self.ui.spinBox_di_count.setValue(self.max_di)
@@ -316,17 +314,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_active_dio(self):
         """Отображает имеющеся в устройстве DI и DO"""
 
-        def get_active_dio(all_dio_buttons, max_dio, all_dio):
+        def get_active_dio(all_dio_buttons, max_dio):
             try:
-                for dio in all_dio_buttons[max_dio:all_dio]:
+                for dio in all_dio_buttons[max_dio:]:
                     dio.setVisible(False)
             except Exception as e:
                 log.exception(e)
             else:
                 return all_dio_buttons[:max_dio]
 
-        self.active_di_buttons_list = get_active_dio(self.all_di_buttons, self.max_di, self.all_dio)
-        self.active_do_buttons_list = get_active_dio(self.all_do_buttons, self.max_do, self.all_dio)
+        self.active_di_buttons_list = get_active_dio(self.all_di_buttons, self.max_di)
+        self.active_do_buttons_list = get_active_dio(self.all_do_buttons, self.max_do)
 
     def change_buttons_style(self, flag: bool):
         """ Изменение вида кнопок настроек при подключении/отключении """
@@ -348,11 +346,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.th_polling_dio.run_flag = True
         try:
             self.th_polling_dio.start()
-        except Exception as e:
-            log.exception(e)
-            MainWindow.show_msg('Ошибка запуска опроса DI и DO')
-        else:
             self.send_to_statusbar('Запущен опрос DI и DO')
+        except Exception as e:
+            MainWindow.show_msg('Ошибка запуска опроса DI и DO')
+            log.exception(e)
 
     def disconnecting(self) -> None:
         """ Отключает от устройства """
@@ -393,46 +390,45 @@ class MainWindow(QtWidgets.QMainWindow):
     def polling_dio(self):
         """ Опрашивает DI и DO в отдельном потоке """
 
-        while getattr(self.th_polling_dio, 'run_flag', True):
-            self.processing(self.di_start_address, self.max_di, self.active_di_buttons_list)
-            self.processing(self.do_start_address, self.max_do, self.active_do_buttons_list)
+        def get_request(dio_start_address, max_dio):
+            """ Отправляет запрос в устройство и возвращает состояний DI и DO в виде списка """
+            try:
+                dio_state_list = self.client.read_coils(dio_start_address, max_dio,
+                                                        unit=self.address).bits  # считывание регистров
+            except Exception as e:
+                log.exception(e)
+                MainWindow.show_msg('Ошибка опроса DI и DO', 'Error')
+            else:
+                return dio_state_list
+
+        def processing(dio_start_address, max_dio, dio_buttons_list):
+            """ Вспомогательная функция опроса DI и DO """
+            dio_list = get_request(dio_start_address, max_dio)  # получить список DI или DO
+
+            try:
+                for i in range(max_dio):  # для актуального количества ва DI или DO
+                    dio_button = dio_buttons_list[i]
+                    dio_button.number += 1  # задает № отдельного DI или DO
+                    dio_button.triggered = True if dio_list[i] else False  # если DIO сработал, выставить флаг
+
+                    if self.state_is_changed:
+                        self.change_style()
+                    self.check_clickable(
+                        dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
+                    # self.check_style(dio_button)
+                    self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
+                    if dio_button.is_pressed():
+                        dio_button.add_to_triggered_dio_list(dio_button.num)
+                    elif dio_button.num in dio_button.get_triggered_list():
+                        dio_button.del_from_triggered_dio_list(dio_button.num)
+                    time.sleep(0.01)
+            except Exception as e:
+                log.exception(e)
+
+        while self.th_polling_dio.run_flag:
+            processing(self.di_start_address, self.max_di, self.active_di_buttons_list)
+            processing(self.do_start_address, self.max_do, self.active_do_buttons_list)
             time.sleep(self.polling_time)
-
-    def processing(self, dio_address, max_dio, dio_buttons_list):
-        """ Вспомогательная функция опроса DI и DO """
-        dio_list = self.get_request(dio_address, max_dio)  # получить список DI или DO
-
-        try:
-            for dio in range(max_dio):  # для актуального количества ва DI или DO
-                dio_button = dio_buttons_list[dio]
-                dio_button.set_num(dio + 1)  # задает № отдельного DI или DO
-                if dio_list[dio]:
-                    # если DIO сработал
-                    dio_button.set_pressed()
-                else:
-                    # если DIO отключился
-                    dio_button.set_released()
-                self.check_clickable(
-                    dio_button)  # сделать кнопки DI и(или) DO кликабельными, если включено их озвучивание
-                self.check_style(dio_button)
-                self.voice_over_preparing(dio_button)  # подготовка к озвучиванию DIO
-                if dio_button.is_pressed():
-                    dio_button.add_to_triggered_dio_list(dio_button.num)
-                elif dio_button.num in dio_button.get_triggered_list():
-                    dio_button.del_from_triggered_dio_list(dio_button.num)
-                time.sleep(0.01)
-        except Exception as e:
-            log.exception(e)
-
-    def get_request(self, dio_address, max_dio):
-        """ Отправляет запрос в устройство и возвращает список с булевыми значениями состояний DI и DO """
-        try:
-            dio_list = self.client.read_coils(dio_address, max_dio, unit=self.address).bits  # считывание регистров
-        except Exception as e:
-            log.exception(e)
-            MainWindow.show_msg('Ошибка опроса DI и DO')
-        else:
-            return dio_list
 
     def check_clickable(self, dio_button):
         """Возможность нажатия кнопок DI или DO, если включено озвучивание"""

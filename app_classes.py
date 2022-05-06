@@ -3,77 +3,74 @@ from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5 import QtGui
 
-import app_service
+import app_logger
+
+log = app_logger.get_app_logger(__name__)
 
 
 class MyButton(QPushButton):
     RED_COLOR = 'rgb(255, 100, 100)'
     GREEN_COLOR = 'rgb(50, 255, 50)'
     BLUE_COLOR = 'rgb(150, 200, 250)'
-    GREY_COLOR = 'rgb(240, 240, 240)'
+    GREY_COLOR = 'rgb(250, 250, 250)'
 
     def __init__(self, *args):
         super().__init__(*args)
         # self.setCheckable(True)
-        self.__pressed = False
+        self._checked = False
+        self._checkable = True
 
-    def is_pressed(self):
-        return self.__pressed
-
-    def set_pressed(self):
-        self.__pressed = True
-
-    def set_released(self):
-        self.__pressed = False
-
-    def mousePressEvent(self, e: QtGui.QMouseEvent):
+    def mousePressEvent(self, event) -> None:
         """ Меняет состояние кнопки при нажатии """
-        super(MyButton, self).mousePressEvent(e)
+        super().mousePressEvent(event)
         try:
-            if not self.is_pressed():
-                self.set_pressed()
-            else:
-                self.set_released()
+            if self.isCheckable():
+                if not self.isChecked():
+                    self.setChecked(True)
+                else:
+                    self.setChecked(False)
+                print(self.isChecked())
         except Exception as e:
-            print(e)
+            log.exception(e)
 
-    def change_style(self):
+    def isCheckable(self) -> bool:
+        return self._checkable
+
+    def setCheckable(self, a0: bool) -> None:
+        self._checked = a0
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, a0: bool) -> None:
+        self._checked = a0
+
+    def change_style(self, *args) -> None:
         """ Меняет внешний вид и текст кнопки """
         pass
 
 
 class ConnectButton(MyButton):
     """ Класс кнопки подключения к устройству"""
+    CONNECT_TEXT = 'ПОДКЛЮЧИТЬ'
+    DISCONNECT_TEXT = 'ОТКЛЮЧИТЬ'
 
     # def __init__(self, *args):
     #     super().__init__(*args)
-    # self.__ied_is_connected = False
-
-    # НАЖАТИЕ НА КНОПКУ
-    # def mousePressEvent(self, event):
+    #
+    # def mousePressEvent(self, event) -> None:
     #     super().mousePressEvent(event)
-    #     # print(f'\n\tmousePressEvent {self} \n')
-    #     # self.change_state()
-    #     if self.is_pressed() and self.__ied_is_connected:
-    #         # если кнопка нажата
-    #         self.setChecked(False)
-    #         self.set_style(False)
-    #         self.__pressed = False
-    #     else:
-    #         self.setChecked(True)
-    #         self.set_style(True)
-    #         self.__pressed = True
 
     def change_style(self):
         """ Меняет внешний вид и текст кнопки подключения"""
-        if self.is_pressed():
+        if self.isChecked():
             self.setStyleSheet(f'background: {DOButton.GREEN_COLOR}')
             # self.setIcon(QIcon(app_service.resource_path('static/images/connect.svg')))
-            self.setText('ОТКЛЮЧИТЬ')
+            self.setText(self.__class__.DISCONNECT_TEXT)
         else:
             self.setStyleSheet(f'background: {DOButton.RED_COLOR}')
             # self.setIcon(QIcon(app_service.resource_path('static/images/disconnect.svg')))
-            self.setText('ПОДКЛЮЧИТЬ')
+            self.setText(self.__class__.CONNECT_TEXT)
         self.setIconSize(QSize(50, 50))
 
 
@@ -87,50 +84,52 @@ class DOControl(QPushButton):
 
 
 class DI0Button(MyButton):
+    _VOICING_FLAG = False
+
+    # _CLICKABLE_FLAG = False
+
     def __init__(self, *args):
         super().__init__(*args)
         self.setCheckable(False)
-        self._is_triggered = False
-        self.voicing_flag = False
+        self._trigger_state = False
+        self.state_is_changed = False
+        self.number = 0
 
-    # НАЖАТИЕ НА КНОПКУ DI ИЛИ DO
-    def mousePressEvent(self, event):
-        if self.is_clickable():
-            # super().mousePressEvent(event)
-            if not self.isChecked():
-                self.setChecked(True)
-                self.set_pressed_flag(True)
-            else:
-                self.setChecked(False)
-            print(DOButton.DO_CONTROL)
+    @property
+    def triggered(self) -> bool:
+        return self._trigger_state
 
-    # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
-    def setCheckable(self, val: bool):
-        super().setCheckable(val)
-        self.__class__._CLICKABLE_FLAG = val
+    @triggered.setter
+    def triggered(self, flg) -> None:
+        if self._trigger_state != flg:
+            self._trigger_state = flg
+            self.state_is_changed = True
+        else:
+            self.state_is_changed = False
 
-    def is_clickable(self):
-        return self.__class__._CLICKABLE_FLAG
-
-    def set_num(self, num):
-        self.num = num
+    # # ВЫСТАВЛЕНИЕ КЛИКАБЕЛЬНОСТИ DI ИЛИ DO
+    # def setCheckable(self, val: bool):
+    #     super().setCheckable(val)
+    #     self.__class__._CLICKABLE_FLAG = val
+    #
+    # def is_clickable(self):
+    #     return self.__class__._CLICKABLE_FLAG
 
     # def set_triggered(self, val: bool):
-    #     self.set_pressed()
+    #     self.press()
 
-    # def is_triggered(self):
-    #     return self._is_triggered
+    # def trigger_state(self):
+    #     return self._trigger_state
 
-    def set_style(self, state):
-        if state == 'default':
+    def change_style(self, state):
+        if self.isChecked():
             self.setStyleSheet(f'background: {DI0Button.BLUE_COLOR}')
-            self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
-        else:
-            if state == 'triggered':
-                self.setStyleSheet(f'background: {DI0Button.GREEN_COLOR}')
-            elif state == 'pressed':
-                self.setStyleSheet(f'background: {DI0Button.BLUE_COLOR}')
+        if state:
+            self.setStyleSheet(f'background: {DI0Button.GREEN_COLOR}')
             self.setFont(QFont('MS Shell Dlg 2', 10, QFont.Bold))
+        else:
+            self.setStyleSheet(f'background: {DI0Button.GREY_COLOR}')
+            self.setFont(QFont('MS Shell Dlg 2', 9, QFont.Normal))
 
     def get_triggered_list(self):
         return self.__class__._TRIGGERED_LIST
@@ -144,7 +143,7 @@ class DI0Button(MyButton):
     def get_pressed_flag(self):
         return self.__class__._PRESSED_FLAG
 
-    def set_pressed_flag(self, val: bool):
+    def press_flag(self, val: bool):
         self.__class__._PRESSED_FLAG = val
 
     def get_voicing_flag(self):
